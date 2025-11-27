@@ -28,6 +28,7 @@ coverage/
 
 # Output files (generated docx)
 *.docx
+!example/example.docx
 
 # Environment
 .env
