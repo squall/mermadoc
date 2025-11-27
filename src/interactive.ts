@@ -27,12 +27,11 @@ function createReadline(): void {
   });
 }
 
+/**
+ * 簡單的輸入函數，使用 raw mode
+ */
 function ask(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      resolve(answer.trim());
-    });
-  });
+  return askWithHotkeys(question, {});
 }
 
 /**
@@ -45,27 +44,25 @@ function askWithHotkeys(
   hotkeys: Record<string, () => void>
 ): Promise<string> {
   return new Promise((resolve) => {
-    // 先暫停 readline 以避免衝突
-    rl.pause();
-
     process.stdout.write(question);
 
     let input = "";
     const stdin = process.stdin;
 
-    // 移除所有現有的 data 監聽器
+    // 確保 stdin 是乾淨的狀態
     stdin.removeAllListeners("data");
 
-    stdin.setRawMode(true);
+    if (stdin.isTTY) {
+      stdin.setRawMode(true);
+    }
     stdin.resume();
     stdin.setEncoding("utf8");
 
     const cleanup = () => {
-      stdin.setRawMode(false);
       stdin.removeAllListeners("data");
-      stdin.pause();
-      // 恢復 readline
-      rl.resume();
+      if (stdin.isTTY) {
+        stdin.setRawMode(false);
+      }
     };
 
     const onData = (key: string) => {
@@ -79,7 +76,7 @@ function askWithHotkeys(
       if (key === "\r" || key === "\n") {
         cleanup();
         process.stdout.write("\n");
-        resolve(input);
+        resolve(input.trim());
         return;
       }
 
