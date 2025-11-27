@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# MD-DOCX 互動式啟動腳本
+
+cd "$(dirname "$0")"
+
+# 檢查是否需要編譯
+if [ ! -f "dist/interactive.js" ]; then
+    echo "首次執行，正在編譯..."
+    npm run build
+fi
+
+# 啟動互動式介面
+node dist/interactive.js

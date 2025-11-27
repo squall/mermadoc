@@ -1,0 +1,53 @@
+{
+  "name": "mermadoc",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mermadoc": "./dist/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/squall/mermadoc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/squall/mermadoc/issues"
+  },
+  "homepage": "https://github.com/squall/mermadoc#readme",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "convert": "node dist/cli.js",
+    "start": "node dist/interactive.js"
+  },
+  "keywords": [
+    "markdown",
+    "docx",
+    "mermaid",
+    "converter"
+  ],
+  "author": "squall",
+  "license": "ISC",
+  "description": "Mermadoc - Convert Markdown to DOCX with Mermaid diagrams and syntax highlighting",
+  "dependencies": {
+    "@m2d/core": "^1.7.1",
+    "@m2d/image": "^1.4.1",
+    "@m2d/mermaid": "^1.2.2",
+    "@m2d/remark-docx": "^1.2.2",
+    "@mermaid-js/mermaid-cli": "^11.12.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "sharp": "^0.34.5",
+    "shiki": "^3.15.0",
+    "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  }
+}
