@@ -3,6 +3,7 @@
 import { MdToDocxConverter } from "./converter.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { t, setLanguage, detectSystemLanguage, type Language } from "./i18n.js";
 
 // ANSI color codes
 const colors = {
@@ -31,6 +32,7 @@ interface CliOptions {
   mermaid: boolean | "auto";
   separator: "pagebreak" | "hr" | "none";
   noMermaid: boolean;
+  lang?: Language;
 }
 
 function log(message: string): void {
@@ -103,6 +105,11 @@ function parseArgs(args: string[]): CliOptions {
         logError(`Invalid separator: ${sep}. Use 'pagebreak', 'hr', or 'none'.`);
         process.exit(1);
       }
+    } else if (arg === "-l" || arg === "--lang") {
+      const lang = args[++i];
+      if (lang === "en" || lang === "zh-TW" || lang === "zh") {
+        options.lang = lang === "zh" ? "zh-TW" : lang as Language;
+      }
     } else if (arg === "-h" || arg === "--help") {
       printHelp();
       process.exit(0);
@@ -116,34 +123,51 @@ function parseArgs(args: string[]): CliOptions {
 
 function printHelp(): void {
   console.log(`
-${colors.bright}md-docx${colors.reset} - Markdown 轉 Word 文件工具（支援 Mermaid 圖表）
+${colors.bright}mermadoc${colors.reset} - ${t("cliTitle")}
 
-${colors.yellow}使用方式:${colors.reset}
-  md-docx <檔案.md>              轉換單一檔案
-  md-docx <資料夾>               合併資料夾內所有 .md 檔案
+${colors.yellow}${t("cliUsage")}${colors.reset}
+  mermadoc <file.md>              ${t("cliExConvertSingle")}
+  mermadoc <directory>            ${t("cliExMergeDir")}
 
-${colors.yellow}選項:${colors.reset}
-  -o, --output <檔案>     指定輸出檔案路徑
-  -s, --separator <類型>  章節分隔方式: pagebreak（分頁）, hr（分隔線）, none（無）
-  --no-mermaid            停用 Mermaid 圖表渲染（預設自動偵測）
-  -h, --help              顯示說明
+${colors.yellow}${t("cliOptions")}${colors.reset}
+  -o, --output <file>     ${t("cliOptOutput")}
+  -s, --separator <type>  ${t("cliOptSeparator")}
+  -l, --lang <lang>       Language: en, zh-TW
+  --no-mermaid            ${t("cliOptNoMermaid")}
+  -h, --help              ${t("cliOptHelp")}
 
-${colors.yellow}範例:${colors.reset}
-  ${colors.dim}# 轉換單一檔案${colors.reset}
-  md-docx example/example.md
+${colors.yellow}${t("cliExamples")}${colors.reset}
+  ${colors.dim}${t("cliExConvertSingle")}${colors.reset}
+  mermadoc example/example.md
 
-  ${colors.dim}# 合併整個資料夾的文件${colors.reset}
-  md-docx ./reports -o manual.docx
+  ${colors.dim}${t("cliExMergeDir")}${colors.reset}
+  mermadoc ./reports -o manual.docx
 
-  ${colors.dim}# 使用分隔線而非分頁${colors.reset}
-  md-docx ./reports -o manual.docx -s hr
+  ${colors.dim}${t("cliExWithSeparator")}${colors.reset}
+  mermadoc ./reports -o manual.docx -s hr
 
-${colors.dim}提示: Mermaid 圖表會自動偵測並渲染，無需額外參數${colors.reset}
+${colors.dim}${t("cliTip")}${colors.reset}
 `);
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+
+  // Pre-parse to check for language option
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "-l" || args[i] === "--lang") {
+      const lang = args[i + 1];
+      if (lang === "en" || lang === "zh-TW" || lang === "zh") {
+        setLanguage(lang === "zh" ? "zh-TW" : lang as Language);
+      }
+      break;
+    }
+  }
+
+  // If no language specified, detect from system
+  if (!args.some(a => a === "-l" || a === "--lang")) {
+    setLanguage(detectSystemLanguage());
+  }
 
   if (args.length === 0) {
     printHelp();
@@ -153,7 +177,7 @@ async function main(): Promise<void> {
   const options = parseArgs(args);
 
   if (!options.input) {
-    logError("請指定輸入檔案或資料夾");
+    logError(t("cliInputRequired"));
     printHelp();
     process.exit(1);
   }
@@ -161,7 +185,7 @@ async function main(): Promise<void> {
   const inputPath = path.resolve(options.input);
 
   if (!fs.existsSync(inputPath)) {
-    logError(`找不到: ${inputPath}`);
+    logError(`${t("fileNotFound")} ${inputPath}`);
     process.exit(1);
   }
 
@@ -194,12 +218,12 @@ async function main(): Promise<void> {
         .sort();
 
       if (mdFiles.length === 0) {
-        logError(`資料夾中沒有 .md 檔案: ${inputPath}`);
+        logError(`${t("noMdFiles")}: ${inputPath}`);
         process.exit(1);
       }
 
       log("");
-      log(`${colors.bright}${icons.folder} 合併文件${colors.reset}`);
+      log(`${colors.bright}${icons.folder} ${t("cliMergeFiles")}${colors.reset}`);
       log(`${colors.dim}───────────────────────────────${colors.reset}`);
 
       // Display file list, indicate if contains Mermaid
@@ -212,10 +236,10 @@ async function main(): Promise<void> {
       log(`${colors.dim}───────────────────────────────${colors.reset}`);
 
       if (enableMermaid) {
-        logInfo(`偵測到 Mermaid 圖表，自動啟用渲染...`);
+        logInfo(t("mermaidDetected"));
       }
 
-      logInfo(`正在轉換中...`);
+      logInfo(t("converting"));
 
       await converter.convertDirectory(inputPath, outputPath, {
         enableMermaid,
@@ -223,7 +247,7 @@ async function main(): Promise<void> {
       });
 
       log("");
-      logSuccess(`完成！已產生: ${colors.bright}${outputPath}${colors.reset}`);
+      logSuccess(`${t("done")} ${t("completed")} ${colors.bright}${outputPath}${colors.reset}`);
       log("");
     } else {
       // Single file mode
@@ -233,22 +257,22 @@ async function main(): Promise<void> {
         : path.join(path.dirname(inputPath), `${baseName}.docx`);
 
       log("");
-      log(`${colors.bright}${icons.file} 轉換文件${colors.reset}`);
+      log(`${colors.bright}${icons.file} ${t("cliConvertFile")}${colors.reset}`);
       log(`${colors.dim}───────────────────────────────${colors.reset}`);
-      logInfo(`輸入: ${path.basename(inputPath)}`);
+      logInfo(`${t("cliInput")} ${path.basename(inputPath)}`);
 
       if (enableMermaid) {
-        logInfo(`偵測到 Mermaid 圖表，自動啟用渲染...`);
+        logInfo(t("mermaidDetected"));
       }
 
-      logInfo(`正在轉換中...`);
+      logInfo(t("converting"));
 
       await converter.convertFile(inputPath, outputPath, {
         enableMermaid,
       });
 
       log("");
-      logSuccess(`完成！已產生: ${colors.bright}${outputPath}${colors.reset}`);
+      logSuccess(`${t("done")} ${t("completed")} ${colors.bright}${outputPath}${colors.reset}`);
       log("");
     }
   } catch (error) {
@@ -256,7 +280,7 @@ async function main(): Promise<void> {
     if (error instanceof Error) {
       logError(error.message);
     } else {
-      logError("發生未知錯誤");
+      logError(t("unknownError"));
     }
     process.exit(1);
   }

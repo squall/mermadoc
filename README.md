@@ -12,6 +12,7 @@ Convert Markdown to Word documents with Mermaid diagram rendering and syntax hig
 - Merge multiple Markdown files into a single document
 - Support GFM tables, code blocks, lists, and more
 - Interactive CLI interface
+- Multi-language support (English / Traditional Chinese)
 
 ## Installation
 
@@ -46,6 +47,7 @@ Select an option:
   2. Merge all Markdown files in a folder
   3. Specify folder path
   4. Show help
+  5. Settings
   0. Exit
 ```
 
@@ -109,6 +111,7 @@ await converter.convertFiles(
 |--------|-------------|
 | `-o, --output <file>` | Specify output file path |
 | `-s, --separator <type>` | Section separator: `pagebreak`, `hr`, `none` |
+| `-l, --lang <lang>` | Language: `en`, `zh-TW` |
 | `--no-mermaid` | Disable Mermaid rendering (auto-detect by default) |
 | `-h, --help` | Show help |
 
@@ -159,6 +162,7 @@ mermadoc/
 │   ├── code-plugin.ts  # Syntax highlighting plugin
 │   ├── cli.ts          # Command line interface
 │   ├── interactive.ts  # Interactive interface
+│   ├── i18n.ts         # Internationalization
 │   └── index.ts        # Module exports
 ├── example/
 │   └── example.md      # Example file
@@ -215,6 +219,7 @@ Markdown 轉 Word 文件工具，支援 Mermaid 圖表自動渲染與程式碼�
 - 合併多個 Markdown 檔案為單一文件
 - 支援 GFM 表格、程式碼區塊、清單等
 - 互動式操作介面
+- 多國語言支援（英文 / 繁體中文）
 
 ## 安裝
 
@@ -249,6 +254,7 @@ npm start
   2. 合併資料夾內所有 Markdown 檔案
   3. 指定資料夾路徑
   4. 顯示說明
+  5. 設定
   0. 離開
 ```
 
@@ -312,6 +318,7 @@ await converter.convertFiles(
 |------|------|
 | `-o, --output <檔案>` | 指定輸出檔案路徑 |
 | `-s, --separator <類型>` | 章節分隔方式：`pagebreak`（分頁）、`hr`（分隔線）、`none`（無） |
+| `-l, --lang <語言>` | 語言：`en`（英文）、`zh-TW`（繁體中文） |
 | `--no-mermaid` | 停用 Mermaid 圖表渲染（預設自動偵測） |
 | `-h, --help` | 顯示說明 |
 
