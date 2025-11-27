@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { MdToDocxConverter } from "./converter.js";
 
-// ANSI 顏色碼
+// ANSI color codes
 const c = {
   reset: "\x1b[0m",
   bright: "\x1b[1m",
@@ -28,16 +28,16 @@ function createReadline(): void {
 }
 
 /**
- * 簡單的輸入函數，使用 raw mode
+ * Simple input function using raw mode
  */
 function ask(question: string): Promise<string> {
   return askWithHotkeys(question, {});
 }
 
 /**
- * 即時按鍵輸入，支援特定快捷鍵
- * @param question 提示文字
- * @param hotkeys 快捷鍵對應的回調 { key: callback }
+ * Real-time key input with hotkey support
+ * @param question Prompt text
+ * @param hotkeys Hotkey callbacks { key: callback }
  */
 function askWithHotkeys(
   question: string,
@@ -49,7 +49,7 @@ function askWithHotkeys(
     let input = "";
     const stdin = process.stdin;
 
-    // 確保 stdin 是乾淨的狀態
+    // Ensure stdin is in clean state
     stdin.removeAllListeners("data");
 
     if (stdin.isTTY) {
@@ -89,16 +89,16 @@ function askWithHotkeys(
         return;
       }
 
-      // 檢查快捷鍵（只在輸入為空時觸發）
+      // Check hotkeys (only trigger when input is empty)
       if (input === "" && hotkeys[key.toLowerCase()]) {
         cleanup();
         process.stdout.write("\n");
         hotkeys[key.toLowerCase()]();
-        resolve("\0HOTKEY"); // 特殊標記
+        resolve("\0HOTKEY"); // Special marker
         return;
       }
 
-      // 一般字元
+      // Regular characters
       if (key >= " " && key <= "~") {
         input += key;
         process.stdout.write(key);
@@ -321,7 +321,7 @@ async function mergeDirectory(): Promise<void> {
   );
   const finalOutput = outputPath || defaultOutput;
 
-  // 分隔符選擇
+  // Separator selection
   console.log(`\n${c.dim}章節分隔方式：${c.reset}`);
   console.log(`  ${c.dim}1.${c.reset} pagebreak - 分頁符（預設）`);
   console.log(`  ${c.dim}2.${c.reset} hr - 水平分隔線`);
@@ -405,7 +405,7 @@ async function specifyDirectory(): Promise<void> {
   );
   const finalOutput = outputPath || defaultOutput;
 
-  // 分隔符選擇
+  // Separator selection
   console.log(`\n${c.dim}章節分隔方式：${c.reset}`);
   console.log(`  ${c.dim}1.${c.reset} pagebreak - 分頁符（預設）`);
   console.log(`  ${c.dim}2.${c.reset} hr - 水平分隔線`);

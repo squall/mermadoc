@@ -2,7 +2,7 @@ import { createHighlighter, type Highlighter, type BundledLanguage } from "shiki
 import type { IPlugin } from "@m2d/core";
 import type { Code } from "mdast";
 
-// 常用語言列表
+// Supported languages list
 const SUPPORTED_LANGUAGES: BundledLanguage[] = [
   "javascript",
   "typescript",
@@ -30,10 +30,10 @@ const SUPPORTED_LANGUAGES: BundledLanguage[] = [
   "dockerfile",
 ];
 
-// 預設語言（當語言不支援時使用）
+// Default language (used when language is not supported)
 const DEFAULT_LANGUAGE: BundledLanguage = "javascript";
 
-// 語言別名對應
+// Language aliases mapping
 const LANGUAGE_ALIASES: Record<string, BundledLanguage> = {
   js: "javascript",
   ts: "typescript",
@@ -51,7 +51,7 @@ const LANGUAGE_ALIASES: Record<string, BundledLanguage> = {
 let highlighterInstance: Highlighter | null = null;
 
 /**
- * 取得或建立 highlighter 實例
+ * Get or create highlighter instance
  */
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterInstance) {
@@ -64,7 +64,7 @@ async function getHighlighter(): Promise<Highlighter> {
 }
 
 /**
- * 解析語言名稱
+ * Resolve language name
  */
 function resolveLanguage(lang: string | null | undefined): BundledLanguage | null {
   if (!lang) return null;
@@ -79,7 +79,7 @@ function resolveLanguage(lang: string | null | undefined): BundledLanguage | nul
 }
 
 /**
- * 將 hex 顏色轉換為 DOCX 格式（去除 # 號）
+ * Convert hex color to DOCX format (remove # prefix)
  */
 function hexToDocxColor(hex: string | undefined): string | undefined {
   if (!hex) return undefined;
@@ -88,32 +88,32 @@ function hexToDocxColor(hex: string | undefined): string | undefined {
 
 export interface CodePluginOptions {
   /**
-   * 程式碼區塊背景顏色
+   * Code block background color
    * @default "F6F8FA"
    */
   backgroundColor?: string;
 
   /**
-   * 程式碼字體
+   * Code font family
    * @default "Consolas"
    */
   fontFamily?: string;
 
   /**
-   * 程式碼字體大小（單位：half-points，20 = 10pt）
+   * Code font size (unit: half-points, 20 = 10pt)
    * @default 20
    */
   fontSize?: number;
 
   /**
-   * 是否顯示行號
+   * Whether to show line numbers
    * @default false
    */
   showLineNumbers?: boolean;
 }
 
 /**
- * 程式碼區塊語法高亮插件
+ * Code block syntax highlighting plugin
  */
 export function codePlugin(options: CodePluginOptions = {}): IPlugin {
   const {
@@ -123,12 +123,12 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
     showLineNumbers = false,
   } = options;
 
-  // 預先載入 highlighter
+  // Pre-load highlighter
   const highlighterPromise = getHighlighter();
 
   return {
     async preprocess() {
-      // 確保 highlighter 已載入
+      // Ensure highlighter is loaded
       await highlighterPromise;
     },
 
@@ -141,7 +141,7 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
       const code = codeNode.value || "";
       const lang = resolveLanguage(codeNode.lang);
 
-      // 如果 highlighter 還沒準備好或語言不支援，使用純文字渲染
+      // If highlighter not ready or language not supported, use plain text rendering
       if (!highlighterInstance || !lang) {
         const lines = code.split("\n");
         return lines.map(
@@ -175,7 +175,7 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
         );
       }
 
-      // 使用 shiki 進行語法高亮
+      // Use shiki for syntax highlighting
       const tokens = highlighterInstance.codeToTokensBase(code, {
         lang,
         theme: "github-light",
@@ -186,7 +186,7 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
       tokens.forEach((lineTokens, lineIndex) => {
         const runs: InstanceType<typeof docx.TextRun>[] = [];
 
-        // 行號
+        // Line numbers
         if (showLineNumbers) {
           runs.push(
             new docx.TextRun({
@@ -198,9 +198,9 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
           );
         }
 
-        // 程式碼 tokens
+        // Code tokens
         if (lineTokens.length === 0) {
-          // 空行
+          // Empty line
           runs.push(
             new docx.TextRun({
               text: " ",
@@ -239,7 +239,7 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
         );
       });
 
-      // 標記節點已處理，避免重複處理
+      // Mark node as processed to avoid duplicate processing
       (node as { type: string }).type = "";
 
       return paragraphs;
@@ -248,7 +248,7 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
 }
 
 /**
- * 清理 highlighter 實例
+ * Cleanup highlighter instance
  */
 export function disposeHighlighter(): void {
   if (highlighterInstance) {

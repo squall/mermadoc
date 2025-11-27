@@ -18,9 +18,9 @@ export interface ConvertOptions {
 }
 
 export interface MergeOptions extends ConvertOptions {
-  /** 自訂檔案排序函數，預設按檔名自然排序 */
+  /** Custom file sorting function, defaults to natural sort by filename */
   sortFn?: (a: string, b: string) => number;
-  /** 章節間的分隔符，預設為分頁符 */
+  /** Section separator, defaults to page break */
   separator?: "pagebreak" | "hr" | "none";
 }
 
@@ -285,12 +285,12 @@ export class MdToDocxConverter {
         fs.unlinkSync(path.join(this.tempDir, file));
       }
     }
-    // 清理 shiki highlighter
+    // Cleanup shiki highlighter
     disposeHighlighter();
   }
 
   /**
-   * 自然排序比較函數，支援數字前綴排序 (00, 01, 02...)
+   * Natural sort comparison function, supports numeric prefix sorting (00, 01, 02...)
    */
   private naturalSort(a: string, b: string): number {
     const regex = /(\d+)|(\D+)/g;
@@ -315,7 +315,7 @@ export class MdToDocxConverter {
   }
 
   /**
-   * 合併目錄中的多個 Markdown 檔案為單一 DOCX
+   * Merge multiple Markdown files in a directory into a single DOCX
    */
   async convertDirectory(
     inputDir: string,
@@ -334,7 +334,7 @@ export class MdToDocxConverter {
       throw new Error(`Not a directory: ${absoluteInputDir}`);
     }
 
-    // 取得所有 .md 檔案
+    // Get all .md files
     const files = fs.readdirSync(absoluteInputDir)
       .filter(file => file.endsWith(".md"))
       .sort(options.sortFn || this.naturalSort.bind(this));
@@ -343,7 +343,7 @@ export class MdToDocxConverter {
       throw new Error(`No markdown files found in: ${absoluteInputDir}`);
     }
 
-    // 決定分隔符
+    // Determine separator
     const separator = options.separator || "pagebreak";
     let separatorMarkdown = "";
     if (separator === "pagebreak") {
@@ -352,7 +352,7 @@ export class MdToDocxConverter {
       separatorMarkdown = "\n\n---\n\n";
     }
 
-    // 合併所有 Markdown 內容
+    // Merge all Markdown contents
     const contents: string[] = [];
     for (const file of files) {
       const filePath = path.join(absoluteInputDir, file);
@@ -362,10 +362,10 @@ export class MdToDocxConverter {
 
     const mergedMarkdown = contents.join(separatorMarkdown);
 
-    // 轉換為 DOCX
+    // Convert to DOCX
     const buffer = await this.convert(mergedMarkdown, options);
 
-    // 確保輸出目錄存在
+    // Ensure output directory exists
     const outputDir = path.dirname(absoluteOutputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -375,7 +375,7 @@ export class MdToDocxConverter {
   }
 
   /**
-   * 合併多個 Markdown 檔案為單一 DOCX
+   * Merge multiple Markdown files into a single DOCX
    */
   async convertFiles(
     inputPaths: string[],
@@ -388,7 +388,7 @@ export class MdToDocxConverter {
       throw new Error("No input files provided");
     }
 
-    // 決定分隔符
+    // Determine separator
     const separator = options.separator || "pagebreak";
     let separatorMarkdown = "";
     if (separator === "pagebreak") {
@@ -397,7 +397,7 @@ export class MdToDocxConverter {
       separatorMarkdown = "\n\n---\n\n";
     }
 
-    // 讀取並合併所有檔案
+    // Read and merge all files
     const contents: string[] = [];
     for (const inputPath of inputPaths) {
       const absoluteInputPath = path.resolve(inputPath);
@@ -410,10 +410,10 @@ export class MdToDocxConverter {
 
     const mergedMarkdown = contents.join(separatorMarkdown);
 
-    // 轉換為 DOCX
+    // Convert to DOCX
     const buffer = await this.convert(mergedMarkdown, options);
 
-    // 確保輸出目錄存在
+    // Ensure output directory exists
     const outputDir = path.dirname(absoluteOutputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });

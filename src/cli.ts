@@ -4,7 +4,7 @@ import { MdToDocxConverter } from "./converter.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
-// ANSI 顏色碼
+// ANSI color codes
 const colors = {
   reset: "\x1b[0m",
   bright: "\x1b[1m",
@@ -55,14 +55,14 @@ function logFile(index: number, filename: string, hasMermaid: boolean): void {
 }
 
 /**
- * 檢查內容是否包含 Mermaid 區塊
+ * Check if content contains Mermaid blocks
  */
 function containsMermaid(content: string): boolean {
   return /```mermaid\n[\s\S]*?```/.test(content);
 }
 
 /**
- * 檢查檔案或目錄中的檔案是否包含 Mermaid
+ * Check if file or files in directory contain Mermaid
  */
 function detectMermaid(inputPath: string): boolean {
   const stat = fs.statSync(inputPath);
@@ -171,19 +171,19 @@ async function main(): Promise<void> {
     const stat = fs.statSync(inputPath);
     const isDirectory = stat.isDirectory();
 
-    // 自動偵測 Mermaid
+    // Auto-detect Mermaid
     let enableMermaid = false;
     if (options.noMermaid) {
       enableMermaid = false;
     } else if (options.mermaid === true) {
       enableMermaid = true;
     } else {
-      // auto 模式：偵測是否有 Mermaid
+      // Auto mode: detect if Mermaid exists
       enableMermaid = detectMermaid(inputPath);
     }
 
     if (isDirectory) {
-      // 目錄模式：合併所有 .md 檔案
+      // Directory mode: merge all .md files
       const dirName = path.basename(inputPath);
       const outputPath = options.output
         ? path.resolve(options.output)
@@ -202,7 +202,7 @@ async function main(): Promise<void> {
       log(`${colors.bright}${icons.folder} 合併文件${colors.reset}`);
       log(`${colors.dim}───────────────────────────────${colors.reset}`);
 
-      // 顯示檔案列表，標示是否有 Mermaid
+      // Display file list, indicate if contains Mermaid
       mdFiles.forEach((f, i) => {
         const content = fs.readFileSync(path.join(inputPath, f), "utf-8");
         const hasMermaid = containsMermaid(content);
@@ -226,7 +226,7 @@ async function main(): Promise<void> {
       logSuccess(`完成！已產生: ${colors.bright}${outputPath}${colors.reset}`);
       log("");
     } else {
-      // 單檔模式
+      // Single file mode
       const baseName = path.basename(inputPath, ".md");
       const outputPath = options.output
         ? path.resolve(options.output)
