@@ -72,6 +72,15 @@ node dist/cli.js ./reports -o manual.docx
 
 # Use horizontal rule as section separator (default: page break)
 node dist/cli.js ./reports -o manual.docx -s hr
+
+# Save images to a separate folder
+node dist/cli.js example/example.md -i ./images
+
+# Set image DPI to 300 (higher resolution)
+node dist/cli.js example/example.md -d 300
+
+# Combine options: high DPI + save images
+node dist/cli.js example/example.md -d 300 -i ./images
 ```
 
 ### Programmatic API
@@ -84,24 +93,30 @@ const converter = new MdToDocxConverter();
 // Convert string
 const buffer = await converter.convert(markdownContent, {
   enableMermaid: true,
+  saveImagesDir: "./images",  // Save images to directory
+  imageDpi: 300,              // Image DPI (default: 150, range: 72-600)
 });
 
 // Convert file
 await converter.convertFile("input.md", "output.docx", {
   enableMermaid: true,
+  saveImagesDir: "./images",
+  imageDpi: 300,
 });
 
 // Merge directory
 await converter.convertDirectory("./docs", "merged.docx", {
   enableMermaid: true,
   separator: "pagebreak", // 'pagebreak' | 'hr' | 'none'
+  saveImagesDir: "./images",
+  imageDpi: 300,
 });
 
 // Merge specific files
 await converter.convertFiles(
   ["01-intro.md", "02-chapter.md"],
   "book.docx",
-  { enableMermaid: true }
+  { enableMermaid: true, imageDpi: 300 }
 );
 ```
 
@@ -111,6 +126,8 @@ await converter.convertFiles(
 |--------|-------------|
 | `-o, --output <file>` | Specify output file path |
 | `-s, --separator <type>` | Section separator: `pagebreak`, `hr`, `none` |
+| `-i, --save-images <dir>` | Save images to specified directory |
+| `-d, --dpi <n>` | Image DPI/resolution (default: 150, range: 72-600) |
 | `-l, --lang <lang>` | Language: `en`, `zh-TW` |
 | `--no-mermaid` | Disable Mermaid rendering (auto-detect by default) |
 | `-h, --help` | Show help |
@@ -279,6 +296,15 @@ node dist/cli.js ./reports -o manual.docx
 
 # 使用水平線作為章節分隔（預設為分頁）
 node dist/cli.js ./reports -o manual.docx -s hr
+
+# 儲存圖片到獨立資料夾
+node dist/cli.js example/example.md -i ./images
+
+# 設定圖片解析度為 300 DPI（較高解析度）
+node dist/cli.js example/example.md -d 300
+
+# 組合選項：高解析度 + 儲存圖片
+node dist/cli.js example/example.md -d 300 -i ./images
 ```
 
 ### 程式碼 API
@@ -291,24 +317,30 @@ const converter = new MdToDocxConverter();
 // 轉換字串
 const buffer = await converter.convert(markdownContent, {
   enableMermaid: true,
+  saveImagesDir: "./images",  // 儲存圖片到資料夾
+  imageDpi: 300,              // 圖片解析度 DPI（預設：150，範圍：72-600）
 });
 
 // 轉換檔案
 await converter.convertFile("input.md", "output.docx", {
   enableMermaid: true,
+  saveImagesDir: "./images",
+  imageDpi: 300,
 });
 
 // 合併目錄
 await converter.convertDirectory("./docs", "merged.docx", {
   enableMermaid: true,
   separator: "pagebreak", // 'pagebreak' | 'hr' | 'none'
+  saveImagesDir: "./images",
+  imageDpi: 300,
 });
 
 // 合併指定檔案
 await converter.convertFiles(
   ["01-intro.md", "02-chapter.md"],
   "book.docx",
-  { enableMermaid: true }
+  { enableMermaid: true, imageDpi: 300 }
 );
 ```
 
@@ -318,6 +350,8 @@ await converter.convertFiles(
 |------|------|
 | `-o, --output <檔案>` | 指定輸出檔案路徑 |
 | `-s, --separator <類型>` | 章節分隔方式：`pagebreak`（分頁）、`hr`（分隔線）、`none`（無） |
+| `-i, --save-images <資料夾>` | 儲存圖片到指定資料夾 |
+| `-d, --dpi <數值>` | 圖片解析度 DPI（預設：150，範圍：72-600） |
 | `-l, --lang <語言>` | 語言：`en`（英文）、`zh-TW`（繁體中文） |
 | `--no-mermaid` | 停用 Mermaid 圖表渲染（預設自動偵測） |
 | `-h, --help` | 顯示說明 |

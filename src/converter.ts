@@ -15,6 +15,10 @@ import sharp from "sharp";
 
 export interface ConvertOptions {
   enableMermaid?: boolean;
+  /** Directory to save extracted images */
+  saveImagesDir?: string;
+  /** Image DPI/resolution (default: 150, range: 72-600) */
+  imageDpi?: number;
 }
 
 export interface MergeOptions extends ConvertOptions {
@@ -39,63 +43,104 @@ interface ImageData {
   };
 }
 
-const nodeImageResolver = async (
-  src: string,
-  options: { maxW: number; maxH: number; dpi: number; scale: number }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> => {
-  let imageBuffer: Buffer;
-  let imageType: "png" | "jpg" | "gif" | "bmp" = "png";
+interface ImageSaveContext {
+  saveImagesDir?: string;
+  imageCounter: number;
+  savedHashes: Set<string>;
+}
 
-  if (src.startsWith("data:")) {
-    const matches = src.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (matches) {
-      const type = matches[1] === "jpeg" ? "jpg" : matches[1];
-      if (type === "jpg" || type === "png" || type === "gif" || type === "bmp") {
-        imageType = type;
-      }
-      imageBuffer = Buffer.from(matches[2], "base64");
-    } else {
-      throw new Error("Invalid data URI format");
-    }
-  } else if (src.startsWith("http://") || src.startsWith("https://")) {
-    const response = await fetch(src);
-    imageBuffer = Buffer.from(await response.arrayBuffer());
-    const contentType = response.headers.get("content-type");
-    if (contentType?.includes("jpeg") || contentType?.includes("jpg")) {
-      imageType = "jpg";
-    } else if (contentType?.includes("gif")) {
-      imageType = "gif";
-    } else if (contentType?.includes("png")) {
-      imageType = "png";
-    }
-  } else {
-    imageBuffer = fs.readFileSync(src);
-    const ext = path.extname(src).toLowerCase().slice(1);
-    if (ext === "jpg" || ext === "jpeg") {
-      imageType = "jpg";
-    } else if (ext === "png" || ext === "gif" || ext === "bmp") {
-      imageType = ext;
-    }
+/**
+ * Save image buffer to specified directory (with deduplication)
+ */
+function saveImageToDir(
+  imageBuffer: Buffer,
+  imageType: string,
+  context: ImageSaveContext
+): void {
+  if (!context.saveImagesDir) return;
+
+  // Calculate hash to avoid duplicates
+  const hash = crypto.createHash("md5").update(imageBuffer).digest("hex");
+  if (context.savedHashes.has(hash)) {
+    return;
+  }
+  context.savedHashes.add(hash);
+
+  if (!fs.existsSync(context.saveImagesDir)) {
+    fs.mkdirSync(context.saveImagesDir, { recursive: true });
   }
 
-  const metadata = await sharp(imageBuffer).metadata();
-  const width = metadata.width || 200;
-  const height = metadata.height || 200;
+  context.imageCounter++;
+  const filename = `image-${String(context.imageCounter).padStart(3, "0")}.${imageType}`;
+  const filePath = path.join(context.saveImagesDir, filename);
+  fs.writeFileSync(filePath, imageBuffer);
+}
 
-  const maxWidthPixels = options.maxW * options.dpi;
-  const maxHeightPixels = options.maxH * options.dpi;
-  const scale = Math.min(maxWidthPixels / width, maxHeightPixels / height, 1);
+/**
+ * Create an image resolver with optional image saving capability
+ */
+function createImageResolver(context: ImageSaveContext) {
+  return async (
+    src: string,
+    options: { maxW: number; maxH: number; dpi: number; scale: number }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> => {
+    let imageBuffer: Buffer;
+    let imageType: "png" | "jpg" | "gif" | "bmp" = "png";
 
-  return {
-    type: imageType,
-    data: new Uint8Array(imageBuffer).buffer as ArrayBuffer,
-    transformation: {
-      width: width * scale,
-      height: height * scale,
-    },
+    if (src.startsWith("data:")) {
+      const matches = src.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (matches) {
+        const type = matches[1] === "jpeg" ? "jpg" : matches[1];
+        if (type === "jpg" || type === "png" || type === "gif" || type === "bmp") {
+          imageType = type;
+        }
+        imageBuffer = Buffer.from(matches[2], "base64");
+      } else {
+        throw new Error("Invalid data URI format");
+      }
+    } else if (src.startsWith("http://") || src.startsWith("https://")) {
+      const response = await fetch(src);
+      imageBuffer = Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get("content-type");
+      if (contentType?.includes("jpeg") || contentType?.includes("jpg")) {
+        imageType = "jpg";
+      } else if (contentType?.includes("gif")) {
+        imageType = "gif";
+      } else if (contentType?.includes("png")) {
+        imageType = "png";
+      }
+    } else {
+      imageBuffer = fs.readFileSync(src);
+      const ext = path.extname(src).toLowerCase().slice(1);
+      if (ext === "jpg" || ext === "jpeg") {
+        imageType = "jpg";
+      } else if (ext === "png" || ext === "gif" || ext === "bmp") {
+        imageType = ext;
+      }
+    }
+
+    // Save image to directory if configured
+    saveImageToDir(imageBuffer, imageType, context);
+
+    const metadata = await sharp(imageBuffer).metadata();
+    const width = metadata.width || 200;
+    const height = metadata.height || 200;
+
+    const maxWidthPixels = options.maxW * options.dpi;
+    const maxHeightPixels = options.maxH * options.dpi;
+    const scale = Math.min(maxWidthPixels / width, maxHeightPixels / height, 1);
+
+    return {
+      type: imageType,
+      data: new Uint8Array(imageBuffer).buffer as ArrayBuffer,
+      transformation: {
+        width: width * scale,
+        height: height * scale,
+      },
+    };
   };
-};
+}
 
 export class MdToDocxConverter {
   private tempDir: string;
@@ -123,8 +168,10 @@ export class MdToDocxConverter {
     return blocks;
   }
 
-  private async renderMermaidToPng(mermaidCode: string): Promise<string> {
-    const hash = crypto.createHash("md5").update(mermaidCode).digest("hex");
+  private async renderMermaidToPng(mermaidCode: string, dpi: number = 150): Promise<string> {
+    // Calculate scale from DPI (base DPI is 96)
+    const scale = Math.max(1, Math.round(dpi / 96 * 10) / 10);
+    const hash = crypto.createHash("md5").update(mermaidCode + dpi).digest("hex");
     const inputFile = path.join(this.tempDir, `${hash}.mmd`);
     const outputFile = path.join(this.tempDir, `${hash}.png`);
 
@@ -146,7 +193,7 @@ export class MdToDocxConverter {
         "-i", inputFile,
         "-o", outputFile,
         "-b", "white",
-        "-s", "2",
+        "-s", String(scale),
       ]);
 
       let stderr = "";
@@ -172,7 +219,7 @@ export class MdToDocxConverter {
     });
   }
 
-  private async preprocessMermaid(markdown: string): Promise<string> {
+  private async preprocessMermaid(markdown: string, dpi: number = 150): Promise<string> {
     const blocks = this.extractMermaidBlocks(markdown);
 
     if (blocks.length === 0) {
@@ -184,7 +231,7 @@ export class MdToDocxConverter {
 
     for (const block of blocks) {
       try {
-        const pngPath = await this.renderMermaidToPng(block.code);
+        const pngPath = await this.renderMermaidToPng(block.code, dpi);
         const pngBuffer = fs.readFileSync(pngPath);
         const base64 = pngBuffer.toString("base64");
         const dataUri = `data:image/png;base64,${base64}`;
@@ -208,12 +255,26 @@ export class MdToDocxConverter {
   }
 
   async convert(markdown: string, options: ConvertOptions = {}): Promise<Buffer> {
-    const { enableMermaid = false } = options;
+    const {
+      enableMermaid = false,
+      saveImagesDir,
+      imageDpi = 150,
+    } = options;
+
+    // Calculate scale from DPI (base DPI is 96)
+    const imageScale = Math.max(1, imageDpi / 96);
 
     let processedMarkdown = markdown;
     if (enableMermaid) {
-      processedMarkdown = await this.preprocessMermaid(markdown);
+      processedMarkdown = await this.preprocessMermaid(markdown, imageDpi);
     }
+
+    // Create image save context
+    const imageSaveContext: ImageSaveContext = {
+      saveImagesDir,
+      imageCounter: 0,
+      savedHashes: new Set<string>(),
+    };
 
     const sectionProps = {
       plugins: [
@@ -228,8 +289,9 @@ export class MdToDocxConverter {
           showLineNumbers: false,
         }),
         imagePlugin({
-          imageResolver: nodeImageResolver,
+          imageResolver: createImageResolver(imageSaveContext),
           cacheConfig: { cacheMode: "memory" },
+          scale: imageScale,
         }),
       ],
     };

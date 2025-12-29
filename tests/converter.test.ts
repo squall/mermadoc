@@ -216,4 +216,111 @@ sequenceDiagram
       ).rejects.toThrow("Input file not found");
     });
   });
+
+  describe("saveImagesDir", () => {
+    const testDir = path.join(process.cwd(), "tests", "fixtures", "images-test");
+    const imagesDir = path.join(testDir, "images");
+    const outputFile = path.join(testDir, "output.docx");
+
+    beforeEach(() => {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true });
+      }
+      fs.mkdirSync(testDir, { recursive: true });
+    });
+
+    it("should save images to specified directory when saveImagesDir is set", async () => {
+      // Create a simple PNG image (1x1 pixel red)
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      const markdown = `# Test Image\n\n![Test](data:image/png;base64,${pngBase64})`;
+
+      await converter.convert(markdown, { saveImagesDir: imagesDir });
+
+      expect(fs.existsSync(imagesDir)).toBe(true);
+      const files = fs.readdirSync(imagesDir);
+      expect(files.length).toBe(1);
+      expect(files[0]).toMatch(/\.png$/);
+    });
+
+    it("should save multiple images with unique names", async () => {
+      // Two different 1x1 pixel images (red and blue)
+      const pngBase64Red = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      const pngBase64Blue = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAX8jx0gAAAABJRU5ErkJggg==";
+      const markdown = `# Multiple Images\n\n![Image1](data:image/png;base64,${pngBase64Red})\n\n![Image2](data:image/png;base64,${pngBase64Blue})`;
+
+      await converter.convert(markdown, { saveImagesDir: imagesDir });
+
+      expect(fs.existsSync(imagesDir)).toBe(true);
+      const files = fs.readdirSync(imagesDir);
+      expect(files.length).toBe(2);
+    });
+
+    it("should save local file images to specified directory", async () => {
+      // Create a test image file
+      const testImagePath = path.join(testDir, "source.png");
+      const pngBuffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==", "base64");
+      fs.writeFileSync(testImagePath, pngBuffer);
+
+      const markdown = `# Local Image\n\n![Local](${testImagePath})`;
+
+      await converter.convert(markdown, { saveImagesDir: imagesDir });
+
+      expect(fs.existsSync(imagesDir)).toBe(true);
+      const files = fs.readdirSync(imagesDir);
+      expect(files.length).toBe(1);
+    });
+
+    it("should save mermaid rendered images to specified directory", async () => {
+      const markdown = `# Mermaid Test\n\n\`\`\`mermaid\nflowchart TD\n    A[Start] --> B[End]\n\`\`\``;
+
+      await converter.convert(markdown, {
+        enableMermaid: true,
+        saveImagesDir: imagesDir
+      });
+
+      expect(fs.existsSync(imagesDir)).toBe(true);
+      const files = fs.readdirSync(imagesDir);
+      expect(files.length).toBe(1);
+      expect(files[0]).toMatch(/\.png$/);
+    });
+
+    it("should not create images directory when saveImagesDir is not set", async () => {
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      const markdown = `# Test Image\n\n![Test](data:image/png;base64,${pngBase64})`;
+
+      await converter.convert(markdown);
+
+      expect(fs.existsSync(imagesDir)).toBe(false);
+    });
+
+    it("should work with convertFile method", async () => {
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      const inputFile = path.join(testDir, "input.md");
+      fs.writeFileSync(inputFile, `# Test\n\n![Test](data:image/png;base64,${pngBase64})`);
+
+      await converter.convertFile(inputFile, outputFile, { saveImagesDir: imagesDir });
+
+      expect(fs.existsSync(outputFile)).toBe(true);
+      expect(fs.existsSync(imagesDir)).toBe(true);
+      const files = fs.readdirSync(imagesDir);
+      expect(files.length).toBe(1);
+    });
+
+    it("should work with convertDirectory method", async () => {
+      // Two different 1x1 pixel images (red and blue)
+      const pngBase64Red = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      const pngBase64Blue = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAX8jx0gAAAABJRU5ErkJggg==";
+      const sourceDir = path.join(testDir, "source");
+      fs.mkdirSync(sourceDir, { recursive: true });
+      fs.writeFileSync(path.join(sourceDir, "01.md"), `# File 1\n\n![Img1](data:image/png;base64,${pngBase64Red})`);
+      fs.writeFileSync(path.join(sourceDir, "02.md"), `# File 2\n\n![Img2](data:image/png;base64,${pngBase64Blue})`);
+
+      await converter.convertDirectory(sourceDir, outputFile, { saveImagesDir: imagesDir });
+
+      expect(fs.existsSync(outputFile)).toBe(true);
+      expect(fs.existsSync(imagesDir)).toBe(true);
+      const files = fs.readdirSync(imagesDir);
+      expect(files.length).toBe(2);
+    });
+  });
 });

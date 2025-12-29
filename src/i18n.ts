@@ -31,7 +31,10 @@ export interface Messages {
   cliOptOutput: string;
   cliOptSeparator: string;
   cliOptNoMermaid: string;
+  cliOptSaveImages: string;
+  cliOptImageDpi: string;
   cliOptHelp: string;
+  cliImagesSaved: string;
   cliExConvertSingle: string;
   cliExMergeDir: string;
   cliExWithSeparator: string;
@@ -73,6 +76,11 @@ export interface Messages {
   interSepNone: string;
   interSelectSeparator: string;
   interAutoRenderMermaid: string;
+  interSaveImages: string;
+  interSaveImagesPath: string;
+  interImagesSaved: string;
+  interAdjustImageDpi: string;
+  interImageDpi: string;
 
   // Help
   helpTitle: string;
@@ -123,7 +131,10 @@ const messages: Record<Language, Messages> = {
     cliOptOutput: "Specify output file path",
     cliOptSeparator: "Section separator: pagebreak, hr, none",
     cliOptNoMermaid: "Disable Mermaid rendering (auto-detect by default)",
+    cliOptSaveImages: "Save images to specified directory",
+    cliOptImageDpi: "Image DPI/resolution (default: 150, range: 72-600)",
     cliOptHelp: "Show help",
+    cliImagesSaved: "Images saved to:",
     cliExConvertSingle: "# Convert single file",
     cliExMergeDir: "# Merge all files in directory",
     cliExWithSeparator: "# Use horizontal rule separator",
@@ -165,6 +176,11 @@ const messages: Record<Language, Messages> = {
     interSepNone: "none - No separator",
     interSelectSeparator: "Select separator (Enter = 1):",
     interAutoRenderMermaid: "Mermaid detected, will auto-render",
+    interSaveImages: "Save images to folder? (y/N):",
+    interSaveImagesPath: "Images folder path:",
+    interImagesSaved: "Images saved to:",
+    interAdjustImageDpi: "Adjust image DPI? (y/N):",
+    interImageDpi: "Image DPI (Enter = 150, range: 72-600):",
 
     // Help
     helpTitle: "Mermadoc Help",
@@ -214,7 +230,10 @@ const messages: Record<Language, Messages> = {
     cliOptOutput: "指定輸出檔案路徑",
     cliOptSeparator: "章節分隔方式: pagebreak（分頁）, hr（分隔線）, none（無）",
     cliOptNoMermaid: "停用 Mermaid 圖表渲染（預設自動偵測）",
+    cliOptSaveImages: "儲存圖片到指定資料夾",
+    cliOptImageDpi: "圖片解析度 DPI（預設：150，範圍：72-600）",
     cliOptHelp: "顯示說明",
+    cliImagesSaved: "圖片已儲存至:",
     cliExConvertSingle: "# 轉換單一檔案",
     cliExMergeDir: "# 合併整個資料夾的文件",
     cliExWithSeparator: "# 使用分隔線而非分頁",
@@ -256,6 +275,11 @@ const messages: Record<Language, Messages> = {
     interSepNone: "none - 無分隔",
     interSelectSeparator: "選擇分隔方式 (Enter = 1):",
     interAutoRenderMermaid: "偵測到 Mermaid 圖表，將自動渲染",
+    interSaveImages: "是否儲存圖片到資料夾？(y/N):",
+    interSaveImagesPath: "圖片資料夾路徑:",
+    interImagesSaved: "圖片已儲存至:",
+    interAdjustImageDpi: "是否調整圖片解析度？(y/N):",
+    interImageDpi: "圖片解析度 DPI (Enter = 150，範圍：72-600):",
 
     // Help
     helpTitle: "Mermadoc 使用說明",

@@ -228,14 +228,43 @@ async function convertSingleFile(): Promise<void> {
     console.log(`\n${c.cyan}→${c.reset} ${t("interAutoRenderMermaid")}`);
   }
 
+  // Ask about saving images
+  const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+  let saveImagesDir: string | undefined;
+  if (saveImagesChoice.toLowerCase() === "y") {
+    const baseName = path.basename(resolvedPath, ".md");
+    const defaultImagesDir = path.join(path.dirname(resolvedPath), `${baseName}_images`);
+    const imagesPath = await ask(
+      `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
+    );
+    saveImagesDir = imagesPath || defaultImagesDir;
+  }
+
+  // Ask about image DPI
+  const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
+  let imageDpi: number | undefined;
+  if (adjustDpiChoice.toLowerCase() === "y") {
+    const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
+    const dpi = parseInt(dpiInput, 10);
+    if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
+      imageDpi = dpi;
+    }
+  }
+
   console.log(`${c.cyan}→${c.reset} ${t("converting")}`);
 
   try {
     const converter = new MdToDocxConverter();
     await converter.convertFile(resolvedPath, finalOutput, {
       enableMermaid: hasMermaid,
+      saveImagesDir,
+      imageDpi,
     });
-    console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}\n`);
+    console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}`);
+    if (saveImagesDir) {
+      console.log(`${c.cyan}→${c.reset} ${t("interImagesSaved")} ${c.bright}${path.resolve(saveImagesDir)}${c.reset}`);
+    }
+    console.log("");
   } catch (error) {
     console.log(`\n${c.red}✗${c.reset} ${t("conversionFailed")} ${error instanceof Error ? error.message : t("unknownError")}\n`);
   }
@@ -343,6 +372,28 @@ async function mergeDirectory(): Promise<void> {
     console.log(`\n${c.cyan}→${c.reset} ${t("interAutoRenderMermaid")}`);
   }
 
+  // Ask about saving images
+  const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+  let saveImagesDir: string | undefined;
+  if (saveImagesChoice.toLowerCase() === "y") {
+    const defaultImagesDir = path.join(path.dirname(resolvedDir), `${dirName}_images`);
+    const imagesPath = await ask(
+      `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
+    );
+    saveImagesDir = imagesPath || defaultImagesDir;
+  }
+
+  // Ask about image DPI
+  const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
+  let imageDpi: number | undefined;
+  if (adjustDpiChoice.toLowerCase() === "y") {
+    const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
+    const dpi = parseInt(dpiInput, 10);
+    if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
+      imageDpi = dpi;
+    }
+  }
+
   console.log(`${c.cyan}→${c.reset} ${t("converting")}`);
 
   try {
@@ -350,8 +401,14 @@ async function mergeDirectory(): Promise<void> {
     await converter.convertDirectory(resolvedDir, finalOutput, {
       enableMermaid: hasMermaid,
       separator,
+      saveImagesDir,
+      imageDpi,
     });
-    console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}\n`);
+    console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}`);
+    if (saveImagesDir) {
+      console.log(`${c.cyan}→${c.reset} ${t("interImagesSaved")} ${c.bright}${path.resolve(saveImagesDir)}${c.reset}`);
+    }
+    console.log("");
   } catch (error) {
     console.log(`\n${c.red}✗${c.reset} ${t("conversionFailed")} ${error instanceof Error ? error.message : t("unknownError")}\n`);
   }
@@ -427,6 +484,28 @@ async function specifyDirectory(): Promise<void> {
     console.log(`\n${c.cyan}→${c.reset} ${t("interAutoRenderMermaid")}`);
   }
 
+  // Ask about saving images
+  const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+  let saveImagesDir: string | undefined;
+  if (saveImagesChoice.toLowerCase() === "y") {
+    const defaultImagesDir = path.join(path.dirname(resolvedDir), `${dirName}_images`);
+    const imagesPath = await ask(
+      `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
+    );
+    saveImagesDir = imagesPath || defaultImagesDir;
+  }
+
+  // Ask about image DPI
+  const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
+  let imageDpi: number | undefined;
+  if (adjustDpiChoice.toLowerCase() === "y") {
+    const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
+    const dpi = parseInt(dpiInput, 10);
+    if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
+      imageDpi = dpi;
+    }
+  }
+
   console.log(`${c.cyan}→${c.reset} ${t("converting")}`);
 
   try {
@@ -434,8 +513,14 @@ async function specifyDirectory(): Promise<void> {
     await converter.convertDirectory(resolvedDir, finalOutput, {
       enableMermaid: hasMermaid,
       separator,
+      saveImagesDir,
+      imageDpi,
     });
-    console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}\n`);
+    console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}`);
+    if (saveImagesDir) {
+      console.log(`${c.cyan}→${c.reset} ${t("interImagesSaved")} ${c.bright}${path.resolve(saveImagesDir)}${c.reset}`);
+    }
+    console.log("");
   } catch (error) {
     console.log(`\n${c.red}✗${c.reset} ${t("conversionFailed")} ${error instanceof Error ? error.message : t("unknownError")}\n`);
   }

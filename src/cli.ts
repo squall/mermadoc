@@ -32,6 +32,8 @@ interface CliOptions {
   mermaid: boolean | "auto";
   separator: "pagebreak" | "hr" | "none";
   noMermaid: boolean;
+  saveImagesDir?: string;
+  imageDpi?: number;
   lang?: Language;
 }
 
@@ -97,6 +99,13 @@ function parseArgs(args: string[]): CliOptions {
       options.mermaid = true;
     } else if (arg === "--no-mermaid") {
       options.noMermaid = true;
+    } else if (arg === "-i" || arg === "--save-images") {
+      options.saveImagesDir = args[++i];
+    } else if (arg === "-d" || arg === "--dpi") {
+      const dpi = parseInt(args[++i], 10);
+      if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
+        options.imageDpi = dpi;
+      }
     } else if (arg === "-s" || arg === "--separator") {
       const sep = args[++i];
       if (sep === "pagebreak" || sep === "hr" || sep === "none") {
@@ -132,6 +141,8 @@ ${colors.yellow}${t("cliUsage")}${colors.reset}
 ${colors.yellow}${t("cliOptions")}${colors.reset}
   -o, --output <file>     ${t("cliOptOutput")}
   -s, --separator <type>  ${t("cliOptSeparator")}
+  -i, --save-images <dir> ${t("cliOptSaveImages")}
+  -d, --dpi <n>           ${t("cliOptImageDpi")}
   -l, --lang <lang>       Language: en, zh-TW
   --no-mermaid            ${t("cliOptNoMermaid")}
   -h, --help              ${t("cliOptHelp")}
@@ -244,10 +255,15 @@ async function main(): Promise<void> {
       await converter.convertDirectory(inputPath, outputPath, {
         enableMermaid,
         separator: options.separator,
+        saveImagesDir: options.saveImagesDir,
+        imageDpi: options.imageDpi,
       });
 
       log("");
       logSuccess(`${t("done")} ${t("completed")} ${colors.bright}${outputPath}${colors.reset}`);
+      if (options.saveImagesDir) {
+        logInfo(`${t("cliImagesSaved")} ${colors.bright}${path.resolve(options.saveImagesDir)}${colors.reset}`);
+      }
       log("");
     } else {
       // Single file mode
@@ -269,10 +285,15 @@ async function main(): Promise<void> {
 
       await converter.convertFile(inputPath, outputPath, {
         enableMermaid,
+        saveImagesDir: options.saveImagesDir,
+        imageDpi: options.imageDpi,
       });
 
       log("");
       logSuccess(`${t("done")} ${t("completed")} ${colors.bright}${outputPath}${colors.reset}`);
+      if (options.saveImagesDir) {
+        logInfo(`${t("cliImagesSaved")} ${colors.bright}${path.resolve(options.saveImagesDir)}${colors.reset}`);
+      }
       log("");
     }
   } catch (error) {
