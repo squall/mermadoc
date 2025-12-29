@@ -17,6 +17,18 @@ Convert Markdown to Word documents with Mermaid diagram rendering and syntax hig
 ## Installation
 
 ```bash
+# Use directly with npx (no install needed)
+npx mermadoc <file.md>
+
+# Or install globally
+npm install -g mermadoc
+```
+
+### For Development
+
+```bash
+git clone https://github.com/user/mermadoc.git
+cd mermadoc
 npm install
 npm run build
 ```
@@ -62,26 +74,28 @@ Select an option:
 
 ```bash
 # Convert a single file (auto-detect Mermaid)
-node dist/cli.js example/example.md
+mermadoc example.md
 
 # Merge all .md files in a folder
-node dist/cli.js ./reports
+mermadoc ./reports
 
 # Specify output filename
-node dist/cli.js ./reports -o manual.docx
+mermadoc ./reports -o manual.docx
 
 # Use horizontal rule as section separator (default: page break)
-node dist/cli.js ./reports -o manual.docx -s hr
+mermadoc ./reports -o manual.docx -s hr
 
 # Save images to a separate folder
-node dist/cli.js example/example.md -i ./images
+mermadoc example.md -i ./images
 
 # Set image DPI to 300 (higher resolution)
-node dist/cli.js example/example.md -d 300
+mermadoc example.md -d 300
 
 # Combine options: high DPI + save images
-node dist/cli.js example/example.md -d 300 -i ./images
+mermadoc example.md -d 300 -i ./images
 ```
+
+> **Note:** You can also use `npx mermadoc` if not installed globally.
 
 ### Programmatic API
 
@@ -160,7 +174,7 @@ The `example/` folder contains sample Markdown files:
 
 ```bash
 # Convert example file
-node dist/cli.js example/example.md
+mermadoc example/example.md
 ```
 
 Example includes:
@@ -241,6 +255,18 @@ Markdown 轉 Word 文件工具，支援 Mermaid 圖表自動渲染與程式碼�
 ## 安裝
 
 ```bash
+# 直接使用 npx（無需安裝）
+npx mermadoc <file.md>
+
+# 或全域安裝
+npm install -g mermadoc
+```
+
+### 開發環境
+
+```bash
+git clone https://github.com/user/mermadoc.git
+cd mermadoc
 npm install
 npm run build
 ```
@@ -286,26 +312,28 @@ npm start
 
 ```bash
 # 轉換單一檔案（自動偵測 Mermaid）
-node dist/cli.js example/example.md
+mermadoc example.md
 
 # 合併資料夾內所有 .md 檔案
-node dist/cli.js ./reports
+mermadoc ./reports
 
 # 指定輸出檔名
-node dist/cli.js ./reports -o manual.docx
+mermadoc ./reports -o manual.docx
 
 # 使用水平線作為章節分隔（預設為分頁）
-node dist/cli.js ./reports -o manual.docx -s hr
+mermadoc ./reports -o manual.docx -s hr
 
 # 儲存圖片到獨立資料夾
-node dist/cli.js example/example.md -i ./images
+mermadoc example.md -i ./images
 
 # 設定圖片解析度為 300 DPI（較高解析度）
-node dist/cli.js example/example.md -d 300
+mermadoc example.md -d 300
 
 # 組合選項：高解析度 + 儲存圖片
-node dist/cli.js example/example.md -d 300 -i ./images
+mermadoc example.md -d 300 -i ./images
 ```
+
+> **提示：** 若未全域安裝，可使用 `npx mermadoc` 執行。
 
 ### 程式碼 API
 
@@ -384,7 +412,7 @@ await converter.convertFiles(
 
 ```bash
 # 轉換範例檔案
-node dist/cli.js example/example.md
+mermadoc example/example.md
 ```
 
 範例內容包含：
