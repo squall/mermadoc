@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
 import { MdToDocxConverter } from "./converter.js";
+import { MdToPdfConverter } from "./pdf-converter.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { t, setLanguage, detectSystemLanguage, type Language } from "./i18n.js";
+
+export type OutputFormat = "docx" | "pdf";
 
 // ANSI color codes
 const colors = {
@@ -29,6 +32,7 @@ const icons = {
 interface CliOptions {
   input: string;
   output?: string;
+  format: OutputFormat;
   mermaid: boolean | "auto";
   separator: "pagebreak" | "hr" | "none";
   noMermaid: boolean;
@@ -86,6 +90,7 @@ function detectMermaid(inputPath: string): boolean {
 function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {
     input: "",
+    format: "docx",
     mermaid: "auto",
     separator: "pagebreak",
     noMermaid: false,
@@ -95,6 +100,14 @@ function parseArgs(args: string[]): CliOptions {
     const arg = args[i];
     if (arg === "-o" || arg === "--output") {
       options.output = args[++i];
+    } else if (arg === "-f" || arg === "--format") {
+      const fmt = args[++i]?.toLowerCase();
+      if (fmt === "docx" || fmt === "pdf") {
+        options.format = fmt;
+      } else {
+        logError(`Invalid format: ${fmt}. Use 'docx' or 'pdf'.`);
+        process.exit(1);
+      }
     } else if (arg === "-m" || arg === "--mermaid") {
       options.mermaid = true;
     } else if (arg === "--no-mermaid") {
@@ -127,6 +140,16 @@ function parseArgs(args: string[]): CliOptions {
     }
   }
 
+  // Auto-detect format from output extension if not explicitly specified
+  if (options.output && !args.some(a => a === "-f" || a === "--format")) {
+    const ext = path.extname(options.output).toLowerCase();
+    if (ext === ".pdf") {
+      options.format = "pdf";
+    } else if (ext === ".docx") {
+      options.format = "docx";
+    }
+  }
+
   return options;
 }
 
@@ -140,6 +163,7 @@ ${colors.yellow}${t("cliUsage")}${colors.reset}
 
 ${colors.yellow}${t("cliOptions")}${colors.reset}
   -o, --output <file>     ${t("cliOptOutput")}
+  -f, --format <type>     ${t("cliOptFormat")}
   -s, --separator <type>  ${t("cliOptSeparator")}
   -i, --save-images <dir> ${t("cliOptSaveImages")}
   -d, --dpi <n>           ${t("cliOptImageDpi")}
@@ -156,6 +180,10 @@ ${colors.yellow}${t("cliExamples")}${colors.reset}
 
   ${colors.dim}${t("cliExWithSeparator")}${colors.reset}
   mermadoc ./reports -o manual.docx -s hr
+
+  ${colors.dim}${t("cliExConvertToPdf")}${colors.reset}
+  mermadoc example.md -f pdf
+  mermadoc example.md -o output.pdf
 
 ${colors.dim}${t("cliTip")}${colors.reset}
 `);
@@ -200,7 +228,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const converter = new MdToDocxConverter();
+  const docxConverter = new MdToDocxConverter();
+  const pdfConverter = new MdToPdfConverter();
+  const outputFormat = options.format;
+  const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
 
   try {
     const stat = fs.statSync(inputPath);
@@ -222,7 +253,7 @@ async function main(): Promise<void> {
       const dirName = path.basename(inputPath);
       const outputPath = options.output
         ? path.resolve(options.output)
-        : path.join(path.dirname(inputPath), `${dirName}.docx`);
+        : path.join(path.dirname(inputPath), `${dirName}${fileExt}`);
 
       const mdFiles = fs.readdirSync(inputPath)
         .filter(f => f.endsWith(".md"))
@@ -250,18 +281,25 @@ async function main(): Promise<void> {
         logInfo(t("mermaidDetected"));
       }
 
-      logInfo(t("converting"));
+      logInfo(`${t("converting")} (${outputFormat.toUpperCase()})`);
 
-      await converter.convertDirectory(inputPath, outputPath, {
-        enableMermaid,
-        separator: options.separator,
-        saveImagesDir: options.saveImagesDir,
-        imageDpi: options.imageDpi,
-      });
+      if (outputFormat === "pdf") {
+        await pdfConverter.convertDirectory(inputPath, outputPath, {
+          enableMermaid,
+          separator: options.separator,
+        });
+      } else {
+        await docxConverter.convertDirectory(inputPath, outputPath, {
+          enableMermaid,
+          separator: options.separator,
+          saveImagesDir: options.saveImagesDir,
+          imageDpi: options.imageDpi,
+        });
+      }
 
       log("");
       logSuccess(`${t("done")} ${t("completed")} ${colors.bright}${outputPath}${colors.reset}`);
-      if (options.saveImagesDir) {
+      if (options.saveImagesDir && outputFormat === "docx") {
         logInfo(`${t("cliImagesSaved")} ${colors.bright}${path.resolve(options.saveImagesDir)}${colors.reset}`);
       }
       log("");
@@ -270,7 +308,7 @@ async function main(): Promise<void> {
       const baseName = path.basename(inputPath, ".md");
       const outputPath = options.output
         ? path.resolve(options.output)
-        : path.join(path.dirname(inputPath), `${baseName}.docx`);
+        : path.join(path.dirname(inputPath), `${baseName}${fileExt}`);
 
       log("");
       log(`${colors.bright}${icons.file} ${t("cliConvertFile")}${colors.reset}`);
@@ -281,21 +319,30 @@ async function main(): Promise<void> {
         logInfo(t("mermaidDetected"));
       }
 
-      logInfo(t("converting"));
+      logInfo(`${t("converting")} (${outputFormat.toUpperCase()})`);
 
-      await converter.convertFile(inputPath, outputPath, {
-        enableMermaid,
-        saveImagesDir: options.saveImagesDir,
-        imageDpi: options.imageDpi,
-      });
+      if (outputFormat === "pdf") {
+        await pdfConverter.convertFile(inputPath, outputPath, {
+          enableMermaid,
+        });
+      } else {
+        await docxConverter.convertFile(inputPath, outputPath, {
+          enableMermaid,
+          saveImagesDir: options.saveImagesDir,
+          imageDpi: options.imageDpi,
+        });
+      }
 
       log("");
       logSuccess(`${t("done")} ${t("completed")} ${colors.bright}${outputPath}${colors.reset}`);
-      if (options.saveImagesDir) {
+      if (options.saveImagesDir && outputFormat === "docx") {
         logInfo(`${t("cliImagesSaved")} ${colors.bright}${path.resolve(options.saveImagesDir)}${colors.reset}`);
       }
       log("");
     }
+
+    // Cleanup
+    await pdfConverter.cleanup();
   } catch (error) {
     log("");
     if (error instanceof Error) {
