@@ -4,14 +4,7 @@ import DOMPurify from "isomorphic-dompurify";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { createRequire } from "node:module";
-
-declare global {
-  interface Window {
-    mermaidRendered?: boolean;
-    mermaidErrors?: string[];
-  }
-}
+import { MermaidRenderer } from "./mermaid-renderer.js";
 
 export interface PdfConvertOptions {
   enableMermaid?: boolean;
@@ -24,14 +17,23 @@ export interface PdfConvertOptions {
     bottom?: string;
     left?: string;
   };
-  /** Mermaid rendering timeout in milliseconds (default: 30000) */
+  /** Mermaid PNG resolution (default: 150, range: 72-600). */
+  imageDpi?: number;
+  /**
+   * @deprecated Mermaid is now pre-rendered to PNG before reaching the browser,
+   * so an in-page rendering timeout is no longer applied. Accepted for backwards
+   * compatibility but ignored.
+   */
   mermaidTimeout?: number;
   /**
    * Custom stylesheet URL. Network access is disabled by default for security;
    * passing a URL here re-enables fetching only that origin.
    */
   stylesheetUrl?: string;
-  /** Retained for backwards compatibility; styles are now always bundled locally. */
+  /**
+   * @deprecated Styles are always bundled locally now. Accepted for backwards
+   * compatibility but ignored.
+   */
   useLocalStyleFallback?: boolean;
 }
 
@@ -51,11 +53,16 @@ const PDF_CONSTANTS = {
     LEFT: "20mm",
   },
   BODY_CLASS: "markdown-body",
-  MERMAID_TIMEOUT: 30000,
-  MERMAID_POST_RENDER_DELAY: 500,
   MERMAID_MARKER: "```mermaid",
   PAGE_TIMEOUT: 60000,
 } as const;
+
+/**
+ * Restrict URIs (`href`, `src`, etc.) to safe schemes plus base64-encoded
+ * inline images — Mermaid diagrams are pre-rendered to `data:image/png;base64,`
+ * payloads, so they must pass through.
+ */
+const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto|tel|ftp):|#|data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,)/i;
 
 const DOMPURIFY_CONFIG = {
   ALLOWED_TAGS: [
@@ -67,9 +74,9 @@ const DOMPURIFY_CONFIG = {
     "img", "sup", "sub", "del", "ins",
   ],
   ALLOWED_ATTR: ["href", "class", "id", "src", "alt", "title", "width", "height"],
+  ALLOWED_URI_REGEXP,
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "form", "input"],
-  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
 };
 
 /**
@@ -108,18 +115,6 @@ const BUNDLED_GITHUB_CSS = `
 `;
 
 /**
- * Resolves to the locally-installed `mermaid.min.js` so Puppeteer can inject it
- * via `addScriptTag({ path })` instead of downloading from a CDN. Memoised.
- */
-const _require = createRequire(import.meta.url);
-let cachedMermaidPath: string | undefined;
-function resolveMermaidScriptPath(): string {
-  if (cachedMermaidPath) return cachedMermaidPath;
-  cachedMermaidPath = _require.resolve("mermaid/dist/mermaid.min.js");
-  return cachedMermaidPath;
-}
-
-/**
  * Async, non-throwing temp file cleanup.
  */
 async function safeCleanupFile(filePath: string): Promise<void> {
@@ -145,12 +140,16 @@ function getSeparatorMarkdown(separator: "pagebreak" | "hr" | "none"): string {
 export class MdToPdfConverter {
   private tempDir: string;
   private browser?: Browser;
+  private mermaidRenderer: MermaidRenderer;
 
   constructor() {
     this.tempDir = path.join(os.tmpdir(), "md-docx-pdf");
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
+    // Use the shared Mermaid renderer so PDF runs hit the same on-disk PNG
+    // cache as DOCX runs (md-docx-mermaid temp dir).
+    this.mermaidRenderer = new MermaidRenderer();
   }
 
   containsMermaid(markdown: string): boolean {
@@ -242,13 +241,10 @@ ${htmlContent}
 
   /**
    * Renders a sanitized HTML document to PDF using a reused Puppeteer browser.
-   * When the document contains Mermaid code blocks, the local `mermaid.min.js`
-   * bundle is injected and `mermaid.run()` is executed inside the page.
    */
   private async renderHtmlToPdf(
     sanitizedHtml: string,
-    options: PdfConvertOptions,
-    hasMermaid: boolean
+    options: PdfConvertOptions
   ): Promise<Buffer> {
     const browser = await this.getBrowser();
     let page: Page | undefined;
@@ -259,56 +255,6 @@ ${htmlContent}
 
       const fullHtml = this.buildHtml(sanitizedHtml, options.stylesheetUrl);
       await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
-
-      if (hasMermaid) {
-        await page.addScriptTag({ path: resolveMermaidScriptPath() });
-        await page.evaluate(() => {
-          window.mermaidErrors = [];
-          window.mermaidRendered = false;
-          // @ts-expect-error injected by addScriptTag
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: "default",
-            securityLevel: "strict",
-            fontFamily: "Arial, sans-serif",
-          });
-        });
-        const mermaidTimeout = options.mermaidTimeout || PDF_CONSTANTS.MERMAID_TIMEOUT;
-        await page.evaluate(async () => {
-          try {
-            const blocks = document.querySelectorAll("pre > code.language-mermaid");
-            if (blocks.length === 0) {
-              window.mermaidRendered = true;
-              return;
-            }
-            for (let i = 0; i < blocks.length; i++) {
-              const codeEl = blocks[i];
-              const pre = codeEl.parentElement;
-              const code = codeEl.textContent ?? "";
-              const container = document.createElement("div");
-              container.className = "mermaid";
-              container.setAttribute("data-mermaid-index", String(i));
-              container.textContent = code;
-              pre?.replaceWith(container);
-            }
-            // @ts-expect-error mermaid is injected
-            await mermaid.run({ querySelector: ".mermaid" });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            window.mermaidErrors?.push(msg);
-          } finally {
-            window.mermaidRendered = true;
-          }
-        });
-        await page.waitForFunction("window.mermaidRendered === true", {
-          timeout: mermaidTimeout,
-        });
-        const mermaidErrors: string[] = await page.evaluate(() => window.mermaidErrors ?? []);
-        if (mermaidErrors.length > 0) {
-          console.warn("Mermaid rendering completed with errors:", mermaidErrors);
-        }
-        await new Promise((resolve) => setTimeout(resolve, PDF_CONSTANTS.MERMAID_POST_RENDER_DELAY));
-      }
 
       const format = options.format || PDF_CONSTANTS.FORMAT;
       const margin = {
@@ -336,14 +282,29 @@ ${htmlContent}
   }
 
   /**
-   * Convert markdown string to PDF buffer. When `enableMermaid` is true (or
-   * Mermaid blocks are present and `enableMermaid` is not explicitly false),
-   * Mermaid diagrams are rendered inside the same Puppeteer page.
+   * Convert markdown string to PDF buffer. When `enableMermaid` is true and
+   * the document contains Mermaid fences, they are pre-rendered to base64
+   * PNGs (shared cache with DOCX) before reaching the browser — the page
+   * itself never executes any Mermaid JavaScript.
    */
   async convert(markdown: string, options: PdfConvertOptions = {}): Promise<Buffer> {
+    let processedMarkdown = markdown;
+    if (options.enableMermaid && this.containsMermaid(markdown)) {
+      try {
+        processedMarkdown = await this.mermaidRenderer.preprocessToMarkdown(
+          markdown,
+          options.imageDpi ?? 150
+        );
+      } catch (error) {
+        throw new Error(
+          `Mermaid pre-rendering failed: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+      }
+    }
+
     let rawHtml: string;
     try {
-      rawHtml = await marked.parse(markdown);
+      rawHtml = await marked.parse(processedMarkdown);
     } catch (error) {
       throw new Error(
         `Markdown parsing failed: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -357,10 +318,8 @@ ${htmlContent}
       }
     }
 
-    const hasMermaid = (options.enableMermaid ?? false) && this.containsMermaid(markdown);
-
     try {
-      return await this.renderHtmlToPdf(sanitized, options, hasMermaid);
+      return await this.renderHtmlToPdf(sanitized, options);
     } catch (error) {
       throw new Error(
         `PDF generation failed: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -567,6 +526,8 @@ ${htmlContent}
       this.browser = undefined;
     }
 
+    // Mermaid PNG cache is shared with DOCX runs; leave it in place so the
+    // next conversion can reuse it. Only purge our own temp dir.
     if (fs.existsSync(this.tempDir)) {
       try {
         const files = await fs.promises.readdir(this.tempDir);

@@ -6,10 +6,9 @@ import remarkMath from "remark-math";
 import { remarkDocx } from "@m2d/remark-docx";
 import { listPlugin, mathPlugin, tablePlugin, emojiPlugin, imagePlugin } from "mdast2docx/dist/plugins";
 import { codePlugin, disposeHighlighter } from "./code-plugin.js";
+import { MermaidRenderer } from "./mermaid-renderer.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { spawn } from "node:child_process";
-import * as os from "node:os";
 import * as crypto from "node:crypto";
 import sharp from "sharp";
 
@@ -26,12 +25,6 @@ export interface MergeOptions extends ConvertOptions {
   sortFn?: (a: string, b: string) => number;
   /** Section separator, defaults to page break */
   separator?: "pagebreak" | "hr" | "none";
-}
-
-interface MermaidBlock {
-  code: string;
-  startIndex: number;
-  endIndex: number;
 }
 
 interface ImageData {
@@ -143,115 +136,10 @@ function createImageResolver(context: ImageSaveContext) {
 }
 
 export class MdToDocxConverter {
-  private tempDir: string;
+  private mermaidRenderer: MermaidRenderer;
 
   constructor() {
-    this.tempDir = path.join(os.tmpdir(), "md-docx-mermaid");
-    if (!fs.existsSync(this.tempDir)) {
-      fs.mkdirSync(this.tempDir, { recursive: true });
-    }
-  }
-
-  private extractMermaidBlocks(markdown: string): MermaidBlock[] {
-    const blocks: MermaidBlock[] = [];
-    const regex = /```mermaid\n([\s\S]*?)```/g;
-    let match;
-
-    while ((match = regex.exec(markdown)) !== null) {
-      blocks.push({
-        code: match[1].trim(),
-        startIndex: match.index,
-        endIndex: match.index + match[0].length,
-      });
-    }
-
-    return blocks;
-  }
-
-  private async renderMermaidToPng(mermaidCode: string, dpi: number = 150): Promise<string> {
-    // Calculate scale from DPI (base DPI is 96)
-    const scale = Math.max(1, Math.round(dpi / 96 * 10) / 10);
-    const hash = crypto.createHash("md5").update(mermaidCode + dpi).digest("hex");
-    const inputFile = path.join(this.tempDir, `${hash}.mmd`);
-    const outputFile = path.join(this.tempDir, `${hash}.png`);
-
-    if (fs.existsSync(outputFile)) {
-      return outputFile;
-    }
-
-    fs.writeFileSync(inputFile, mermaidCode);
-
-    const mmdc = path.join(
-      process.cwd(),
-      "node_modules",
-      ".bin",
-      "mmdc"
-    );
-
-    return new Promise((resolve, reject) => {
-      const proc = spawn(mmdc, [
-        "-i", inputFile,
-        "-o", outputFile,
-        "-b", "white",
-        "-s", String(scale),
-      ]);
-
-      let stderr = "";
-      proc.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      proc.on("close", (code) => {
-        if (code !== 0) {
-          reject(new Error(`Mermaid rendering failed: ${stderr}`));
-          return;
-        }
-
-        if (!fs.existsSync(outputFile)) {
-          reject(new Error("Mermaid output file not created"));
-          return;
-        }
-
-        resolve(outputFile);
-      });
-
-      proc.on("error", reject);
-    });
-  }
-
-  private async preprocessMermaid(markdown: string, dpi: number = 150): Promise<string> {
-    const blocks = this.extractMermaidBlocks(markdown);
-
-    if (blocks.length === 0) {
-      return markdown;
-    }
-
-    let result = markdown;
-    let offset = 0;
-
-    for (const block of blocks) {
-      try {
-        const pngPath = await this.renderMermaidToPng(block.code, dpi);
-        const pngBuffer = fs.readFileSync(pngPath);
-        const base64 = pngBuffer.toString("base64");
-        const dataUri = `data:image/png;base64,${base64}`;
-        const imgMarkdown = `\n\n![Mermaid Diagram](${dataUri})\n\n`;
-
-        const adjustedStart = block.startIndex + offset;
-        const adjustedEnd = block.endIndex + offset;
-
-        result =
-          result.substring(0, adjustedStart) +
-          imgMarkdown +
-          result.substring(adjustedEnd);
-
-        offset += imgMarkdown.length - (block.endIndex - block.startIndex);
-      } catch (error) {
-        console.error(`Failed to render mermaid block: ${error}`);
-      }
-    }
-
-    return result;
+    this.mermaidRenderer = new MermaidRenderer();
   }
 
   async convert(markdown: string, options: ConvertOptions = {}): Promise<Buffer> {
@@ -266,7 +154,7 @@ export class MdToDocxConverter {
 
     let processedMarkdown = markdown;
     if (enableMermaid) {
-      processedMarkdown = await this.preprocessMermaid(markdown, imageDpi);
+      processedMarkdown = await this.mermaidRenderer.preprocessToMarkdown(markdown, imageDpi);
     }
 
     // Create image save context
@@ -341,12 +229,7 @@ export class MdToDocxConverter {
   }
 
   cleanup(): void {
-    if (fs.existsSync(this.tempDir)) {
-      const files = fs.readdirSync(this.tempDir);
-      for (const file of files) {
-        fs.unlinkSync(path.join(this.tempDir, file));
-      }
-    }
+    this.mermaidRenderer.cleanup();
     // Cleanup shiki highlighter
     disposeHighlighter();
   }

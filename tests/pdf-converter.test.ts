@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { MdToPdfConverter } from "../src/pdf-converter.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -381,37 +381,71 @@ pie title Pets
       ).rejects.toThrow(/Not a file/);
     });
 
-    it("should handle file read permission errors gracefully", async () => {
-      // This test verifies error message formatting
-      const error = new Error("EACCES: permission denied");
-      expect(error.message).toContain("permission denied");
+    it("should surface a meaningful error when the output file write fails", async () => {
+      const writeSpy = vi
+        .spyOn(fs.promises, "writeFile")
+        .mockRejectedValueOnce(Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }));
+
+      const inputMd = path.join(testDir, "perm-test.md");
+      const outputFile = path.join(testDir, "perm-output.pdf");
+      fs.writeFileSync(inputMd, "# Permission test\n\nContent.");
+
+      try {
+        await expect(converter.convertFile(inputMd, outputFile)).rejects.toThrow(
+          /Failed to write output file/
+        );
+      } finally {
+        writeSpy.mockRestore();
+        if (fs.existsSync(inputMd)) fs.unlinkSync(inputMd);
+        if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+      }
     });
   });
 
   describe("Resource Cleanup", () => {
-    it("should cleanup after successful conversion", async () => {
+    it("should clear the internal browser reference after cleanup", async () => {
       const markdown = "# Cleanup Test";
       await converter.convert(markdown);
-      // No exception means cleanup was successful
-      expect(true).toBe(true);
+
+      const browserBefore = (converter as unknown as { browser?: { close: () => Promise<void> } }).browser;
+      expect(browserBefore).toBeDefined();
+
+      await converter.cleanup();
+
+      const browserAfter = (converter as unknown as { browser?: unknown }).browser;
+      expect(browserAfter).toBeUndefined();
     });
 
-    it("should cleanup after conversion with error", async () => {
-      try {
-        await converter.convertFile("/non/existent/file.md", "output.pdf");
-      } catch {
-        // Expected error
-      }
-      // Cleanup should still be called and not throw
+    it("should call browser.close() on cleanup", async () => {
+      const markdown = "# Cleanup Test";
+      await converter.convert(markdown);
+
+      const browser = (converter as unknown as { browser: { close: () => Promise<void> } }).browser;
+      const closeSpy = vi.spyOn(browser, "close");
+
       await converter.cleanup();
-      expect(true).toBe(true);
+
+      expect(closeSpy).toHaveBeenCalledTimes(1);
     });
 
-    it("should handle multiple cleanup calls", async () => {
+    it("should leave a clean state after a failed convertFile call", async () => {
+      await expect(
+        converter.convertFile("/non/existent/file.md", "output.pdf")
+      ).rejects.toThrow();
+
+      // Browser should never have launched for a pre-flight failure path.
+      const browser = (converter as unknown as { browser?: unknown }).browser;
+      expect(browser).toBeUndefined();
+
+      // cleanup() should still be safe to call.
+      await expect(converter.cleanup()).resolves.toBeUndefined();
+    });
+
+    it("should be idempotent across multiple cleanup calls", async () => {
       await converter.cleanup();
       await converter.cleanup();
-      // Should not throw even when called multiple times
-      expect(true).toBe(true);
+      const browser = (converter as unknown as { browser?: unknown }).browser;
+      expect(browser).toBeUndefined();
     });
   });
 

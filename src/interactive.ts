@@ -3,11 +3,38 @@
 import * as readline from "node:readline";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { MdToDocxConverter } from "./converter.js";
 import { MdToPdfConverter } from "./pdf-converter.js";
+import type { OutputFormat } from "./cli.js";
 import { t, setLanguage, getLanguage, initLanguageFromConfig, saveConfig, type Language } from "./i18n.js";
 
-type OutputFormat = "docx" | "pdf";
+/** Map the user's menu input to an OutputFormat. Empty / unknown defaults to docx. */
+export function parseOutputFormatChoice(input: string): OutputFormat {
+  return input.trim() === "2" ? "pdf" : "docx";
+}
+
+/** Map the user's menu input to a separator option. Empty / unknown defaults to pagebreak. */
+export function parseSeparatorChoice(input: string): "pagebreak" | "hr" | "none" {
+  switch (input.trim()) {
+    case "2": return "hr";
+    case "3": return "none";
+    default: return "pagebreak";
+  }
+}
+
+/** Parse a DPI value, returning undefined when invalid or out of the 72-600 range. */
+export function parseDpiInput(input: string): number | undefined {
+  const dpi = parseInt(input, 10);
+  if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
+    return dpi;
+  }
+  return undefined;
+}
+
+export function containsMermaid(content: string): boolean {
+  return /```mermaid\n[\s\S]*?```/.test(content);
+}
 
 // ANSI color codes
 const c = {
@@ -140,10 +167,6 @@ function printMenu(): void {
 `);
 }
 
-function containsMermaid(content: string): boolean {
-  return /```mermaid\n[\s\S]*?```/.test(content);
-}
-
 function detectMermaidInPath(inputPath: string): boolean {
   const stat = fs.statSync(inputPath);
   if (stat.isDirectory()) {
@@ -223,7 +246,7 @@ async function convertSingleFile(): Promise<void> {
   console.log(`  ${c.dim}1.${c.reset} ${t("interFormatDocx")}`);
   console.log(`  ${c.dim}2.${c.reset} ${t("interFormatPdf")}`);
   const formatChoice = await ask(`${c.cyan}?${c.reset} Select (Enter = 1): `);
-  const outputFormat: OutputFormat = formatChoice === "2" ? "pdf" : "docx";
+  const outputFormat: OutputFormat = parseOutputFormatChoice(formatChoice);
   const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
 
   const baseName = path.basename(resolvedPath, ".md");
@@ -258,10 +281,7 @@ async function convertSingleFile(): Promise<void> {
     const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
     if (adjustDpiChoice.toLowerCase() === "y") {
       const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
-      const dpi = parseInt(dpiInput, 10);
-      if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
-        imageDpi = dpi;
-      }
+      imageDpi = parseDpiInput(dpiInput);
     }
   }
 
@@ -371,7 +391,7 @@ async function mergeDirectory(): Promise<void> {
   console.log(`  ${c.dim}1.${c.reset} ${t("interFormatDocx")}`);
   console.log(`  ${c.dim}2.${c.reset} ${t("interFormatPdf")}`);
   const formatChoice = await ask(`${c.cyan}?${c.reset} Select (Enter = 1): `);
-  const outputFormat: OutputFormat = formatChoice === "2" ? "pdf" : "docx";
+  const outputFormat: OutputFormat = parseOutputFormatChoice(formatChoice);
   const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
 
   const dirName = path.basename(resolvedDir);
@@ -389,13 +409,7 @@ async function mergeDirectory(): Promise<void> {
   console.log(`  ${c.dim}3.${c.reset} ${t("interSepNone")}`);
 
   const sepChoice = await ask(`${c.cyan}?${c.reset} ${t("interSelectSeparator")} `);
-  const separators: Record<string, "pagebreak" | "hr" | "none"> = {
-    "1": "pagebreak",
-    "2": "hr",
-    "3": "none",
-    "": "pagebreak",
-  };
-  const separator = separators[sepChoice] || "pagebreak";
+  const separator = parseSeparatorChoice(sepChoice);
 
   const hasMermaid = detectMermaidInPath(resolvedDir);
   if (hasMermaid) {
@@ -420,10 +434,7 @@ async function mergeDirectory(): Promise<void> {
     const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
     if (adjustDpiChoice.toLowerCase() === "y") {
       const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
-      const dpi = parseInt(dpiInput, 10);
-      if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
-        imageDpi = dpi;
-      }
+      imageDpi = parseDpiInput(dpiInput);
     }
   }
 
@@ -503,7 +514,7 @@ async function specifyDirectory(): Promise<void> {
   console.log(`  ${c.dim}1.${c.reset} ${t("interFormatDocx")}`);
   console.log(`  ${c.dim}2.${c.reset} ${t("interFormatPdf")}`);
   const formatChoice = await ask(`${c.cyan}?${c.reset} Select (Enter = 1): `);
-  const outputFormat: OutputFormat = formatChoice === "2" ? "pdf" : "docx";
+  const outputFormat: OutputFormat = parseOutputFormatChoice(formatChoice);
   const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
 
   const dirName = path.basename(resolvedDir);
@@ -521,13 +532,7 @@ async function specifyDirectory(): Promise<void> {
   console.log(`  ${c.dim}3.${c.reset} ${t("interSepNone")}`);
 
   const sepChoice = await ask(`${c.cyan}?${c.reset} ${t("interSelectSeparator")} `);
-  const separators: Record<string, "pagebreak" | "hr" | "none"> = {
-    "1": "pagebreak",
-    "2": "hr",
-    "3": "none",
-    "": "pagebreak",
-  };
-  const separator = separators[sepChoice] || "pagebreak";
+  const separator = parseSeparatorChoice(sepChoice);
 
   const hasMermaid = detectMermaidInPath(resolvedDir);
   if (hasMermaid) {
@@ -552,10 +557,7 @@ async function specifyDirectory(): Promise<void> {
     const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
     if (adjustDpiChoice.toLowerCase() === "y") {
       const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
-      const dpi = parseInt(dpiInput, 10);
-      if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
-        imageDpi = dpi;
-      }
+      imageDpi = parseDpiInput(dpiInput);
     }
   }
 
@@ -695,4 +697,8 @@ async function main(): Promise<void> {
   rl.close();
 }
 
-main();
+// Only execute main() when run directly (not when imported by tests).
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  main();
+}
