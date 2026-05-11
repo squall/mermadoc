@@ -4,9 +4,22 @@ import { MdToDocxConverter } from "./converter.js";
 import { MdToPdfConverter } from "./pdf-converter.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { t, setLanguage, detectSystemLanguage, type Language } from "./i18n.js";
 
 export type OutputFormat = "docx" | "pdf";
+
+export interface CliOptions {
+  input: string;
+  output?: string;
+  format: OutputFormat;
+  mermaid: boolean | "auto";
+  separator: "pagebreak" | "hr" | "none";
+  noMermaid: boolean;
+  saveImagesDir?: string;
+  imageDpi?: number;
+  lang?: Language;
+}
 
 // ANSI color codes
 const colors = {
@@ -28,18 +41,6 @@ const icons = {
   merge: "📑",
   mermaid: "🧜",
 };
-
-interface CliOptions {
-  input: string;
-  output?: string;
-  format: OutputFormat;
-  mermaid: boolean | "auto";
-  separator: "pagebreak" | "hr" | "none";
-  noMermaid: boolean;
-  saveImagesDir?: string;
-  imageDpi?: number;
-  lang?: Language;
-}
 
 function log(message: string): void {
   console.log(message);
@@ -87,7 +88,7 @@ function detectMermaid(inputPath: string): boolean {
   }
 }
 
-function parseArgs(args: string[]): CliOptions {
+export function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {
     input: "",
     format: "docx",
@@ -340,9 +341,6 @@ async function main(): Promise<void> {
       }
       log("");
     }
-
-    // Cleanup
-    await pdfConverter.cleanup();
   } catch (error) {
     log("");
     if (error instanceof Error) {
@@ -351,7 +349,14 @@ async function main(): Promise<void> {
       logError(t("unknownError"));
     }
     process.exit(1);
+  } finally {
+    // Always release Chromium / temp resources, even on error paths.
+    await pdfConverter.cleanup();
   }
 }
 
-main();
+// Only execute main() when run directly (not when imported by tests).
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  main();
+}

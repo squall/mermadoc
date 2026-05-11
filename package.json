@@ -47,7 +47,6 @@
     "@mermaid-js/mermaid-cli": "^11.12.0",
     "isomorphic-dompurify": "^2.35.0",
     "marked": "^17.0.1",
-    "md-to-pdf": "^5.2.5",
     "puppeteer": "^24.34.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
