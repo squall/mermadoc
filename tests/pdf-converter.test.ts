@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { MdToPdfConverter } from "../src/pdf-converter.js";
+import { PDFDocument } from "pdf-lib";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -481,6 +482,28 @@ pie title Pets
     it("should support none separator", async () => {
       await converter.convertDirectory(sepTestDir, outputFile, { separator: "none" });
       expect(fs.existsSync(outputFile)).toBe(true);
+    });
+
+    it("should produce one PDF page per source file when using pagebreak (pdf-lib merge)", async () => {
+      // Three single-line files should yield three single-page PDFs which
+      // pdf-lib joins into a 3-page output.
+      const tripleDir = path.join(testDir, "triple");
+      if (fs.existsSync(tripleDir)) fs.rmSync(tripleDir, { recursive: true });
+      fs.mkdirSync(tripleDir, { recursive: true });
+      fs.writeFileSync(path.join(tripleDir, "01.md"), "# Page One\n\nA");
+      fs.writeFileSync(path.join(tripleDir, "02.md"), "# Page Two\n\nB");
+      fs.writeFileSync(path.join(tripleDir, "03.md"), "# Page Three\n\nC");
+
+      const tripleOut = path.join(testDir, "triple.pdf");
+      try {
+        await converter.convertDirectory(tripleDir, tripleOut, { separator: "pagebreak" });
+        const buffer = fs.readFileSync(tripleOut);
+        const pdfDoc = await PDFDocument.load(buffer);
+        expect(pdfDoc.getPageCount()).toBe(3);
+      } finally {
+        if (fs.existsSync(tripleOut)) fs.unlinkSync(tripleOut);
+        fs.rmSync(tripleDir, { recursive: true });
+      }
     });
   });
 });

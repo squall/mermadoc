@@ -1,6 +1,7 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
+import { PDFDocument } from "pdf-lib";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -420,6 +421,40 @@ ${htmlContent}
     }
   }
 
+  /**
+   * Streams per-file PDF Buffers into a single merged PDFDocument so only
+   * one source PDF is held in memory at a time alongside the growing
+   * destination.
+   */
+  private async mergeFilesStreaming(
+    filePaths: string[],
+    options: PdfConvertOptions
+  ): Promise<Buffer> {
+    const mergedPdf = await PDFDocument.create();
+    for (const filePath of filePaths) {
+      const markdown = await this.readFileAsync(filePath);
+      const buffer = await this.convert(markdown, options);
+      const sourcePdf = await PDFDocument.load(buffer);
+      const pages = await mergedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+      for (const page of pages) {
+        mergedPdf.addPage(page);
+      }
+    }
+    const bytes = await mergedPdf.save();
+    return Buffer.from(bytes);
+  }
+
+  private async mergeViaInlineConcat(
+    filePaths: string[],
+    separator: "hr" | "none",
+    options: PdfConvertOptions
+  ): Promise<Buffer> {
+    const separatorMarkdown = getSeparatorMarkdown(separator);
+    const contents = await Promise.all(filePaths.map((p) => this.readFileAsync(p)));
+    const mergedMarkdown = contents.join(separatorMarkdown);
+    return this.convert(mergedMarkdown, options);
+  }
+
   async convertDirectory(
     inputDir: string,
     outputPath: string,
@@ -451,14 +486,14 @@ ${htmlContent}
       throw new Error(`No markdown files found in: ${absoluteInputDir}`);
     }
 
-    const separatorMarkdown = getSeparatorMarkdown(options.separator || "pagebreak");
     const filePaths = files.map((file) => path.join(absoluteInputDir, file));
-    const contents = await Promise.all(filePaths.map((p) => this.readFileAsync(p)));
-    const mergedMarkdown = contents.join(separatorMarkdown);
+    const separator = options.separator || "pagebreak";
 
     let buffer: Buffer;
     try {
-      buffer = await this.convert(mergedMarkdown, options);
+      buffer = separator === "pagebreak"
+        ? await this.mergeFilesStreaming(filePaths, options)
+        : await this.mergeViaInlineConcat(filePaths, separator, options);
     } catch (error) {
       throw new Error(
         `PDF conversion failed for directory ${absoluteInputDir}: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -493,13 +528,13 @@ ${htmlContent}
       }
     }
 
-    const separatorMarkdown = getSeparatorMarkdown(options.separator || "pagebreak");
-    const contents = await Promise.all(absoluteInputPaths.map((p) => this.readFileAsync(p)));
-    const mergedMarkdown = contents.join(separatorMarkdown);
+    const separator = options.separator || "pagebreak";
 
     let buffer: Buffer;
     try {
-      buffer = await this.convert(mergedMarkdown, options);
+      buffer = separator === "pagebreak"
+        ? await this.mergeFilesStreaming(absoluteInputPaths, options)
+        : await this.mergeViaInlineConcat(absoluteInputPaths, separator, options);
     } catch (error) {
       throw new Error(
         `PDF conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`
