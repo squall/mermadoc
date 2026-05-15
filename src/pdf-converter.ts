@@ -6,9 +6,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { MermaidRenderer } from "./mermaid-renderer.js";
+import { inlineLocalImages } from "./image-inliner.js";
 
 export interface PdfConvertOptions {
   enableMermaid?: boolean;
+  /**
+   * Base directory used to resolve relative image paths when inlining them
+   * to base64 data URIs. `convertFile()` populates this automatically; pass
+   * explicitly when calling `convert()` with a markdown string that uses
+   * relative `![](./path.png)` references.
+   */
+  baseDir?: string;
   /** PDF page format */
   format?: "A4" | "Letter" | "Legal";
   /** PDF margins */
@@ -290,10 +298,13 @@ ${htmlContent}
    */
   async convert(markdown: string, options: PdfConvertOptions = {}): Promise<Buffer> {
     let processedMarkdown = markdown;
-    if (options.enableMermaid && this.containsMermaid(markdown)) {
+    if (options.baseDir) {
+      processedMarkdown = inlineLocalImages(processedMarkdown, options.baseDir);
+    }
+    if (options.enableMermaid && this.containsMermaid(processedMarkdown)) {
       try {
         processedMarkdown = await this.mermaidRenderer.preprocessToMarkdown(
-          markdown,
+          processedMarkdown,
           options.imageDpi ?? 150
         );
       } catch (error) {
@@ -375,7 +386,10 @@ ${htmlContent}
 
     let buffer: Buffer;
     try {
-      buffer = await this.convert(markdown, options);
+      buffer = await this.convert(markdown, {
+        ...options,
+        baseDir: options.baseDir ?? path.dirname(absoluteInputPath),
+      });
     } catch (error) {
       throw new Error(
         `PDF conversion failed for ${absoluteInputPath}: ${error instanceof Error ? error.message : "Unknown error"}`
@@ -433,7 +447,11 @@ ${htmlContent}
     const mergedPdf = await PDFDocument.create();
     for (const filePath of filePaths) {
       const markdown = await this.readFileAsync(filePath);
-      const buffer = await this.convert(markdown, options);
+      // Each file resolves its own relative image paths against its own dir.
+      const buffer = await this.convert(markdown, {
+        ...options,
+        baseDir: options.baseDir ?? path.dirname(filePath),
+      });
       const sourcePdf = await PDFDocument.load(buffer);
       const pages = await mergedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
       for (const page of pages) {
@@ -450,9 +468,19 @@ ${htmlContent}
     options: PdfConvertOptions
   ): Promise<Buffer> {
     const separatorMarkdown = getSeparatorMarkdown(separator);
-    const contents = await Promise.all(filePaths.map((p) => this.readFileAsync(p)));
+    // Inline each file's images using its own directory before joining, so
+    // images stay correctly resolved after concatenation.
+    const contents = await Promise.all(
+      filePaths.map(async (p) => {
+        const md = await this.readFileAsync(p);
+        return options.baseDir
+          ? md
+          : inlineLocalImages(md, path.dirname(p));
+      })
+    );
     const mergedMarkdown = contents.join(separatorMarkdown);
-    return this.convert(mergedMarkdown, options);
+    // baseDir is already applied per-file; suppress double-inlining downstream.
+    return this.convert(mergedMarkdown, { ...options, baseDir: options.baseDir });
   }
 
   async convertDirectory(
