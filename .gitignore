@@ -34,3 +34,14 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+# 本機轉檔產出——避免將轉換來源／結果誤入版控
+# （example/ 之範例檔不受影響；如需保留產出請置於 output/）
+/*.docx
+/*.pdf
+/*.md
+!README.md
+output/
+
+# Word 暫存檔
+~$*
