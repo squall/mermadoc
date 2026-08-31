@@ -3,8 +3,38 @@
 import * as readline from "node:readline";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { MdToDocxConverter } from "./converter.js";
+import { MdToPdfConverter } from "./pdf-converter.js";
+import type { OutputFormat } from "./cli.js";
 import { t, setLanguage, getLanguage, initLanguageFromConfig, saveConfig, type Language } from "./i18n.js";
+
+/** Map the user's menu input to an OutputFormat. Empty / unknown defaults to docx. */
+export function parseOutputFormatChoice(input: string): OutputFormat {
+  return input.trim() === "2" ? "pdf" : "docx";
+}
+
+/** Map the user's menu input to a separator option. Empty / unknown defaults to pagebreak. */
+export function parseSeparatorChoice(input: string): "pagebreak" | "hr" | "none" {
+  switch (input.trim()) {
+    case "2": return "hr";
+    case "3": return "none";
+    default: return "pagebreak";
+  }
+}
+
+/** Parse a DPI value, returning undefined when invalid or out of the 72-600 range. */
+export function parseDpiInput(input: string): number | undefined {
+  const dpi = parseInt(input, 10);
+  if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
+    return dpi;
+  }
+  return undefined;
+}
+
+export function containsMermaid(content: string): boolean {
+  return /```mermaid\n[\s\S]*?```/.test(content);
+}
 
 // ANSI color codes
 const c = {
@@ -137,10 +167,6 @@ function printMenu(): void {
 `);
 }
 
-function containsMermaid(content: string): boolean {
-  return /```mermaid\n[\s\S]*?```/.test(content);
-}
-
 function detectMermaidInPath(inputPath: string): boolean {
   const stat = fs.statSync(inputPath);
   if (stat.isDirectory()) {
@@ -215,8 +241,16 @@ async function convertSingleFile(): Promise<void> {
     return;
   }
 
+  // Ask about output format
+  console.log(`\n${c.cyan}?${c.reset} ${t("interSelectFormat")}`);
+  console.log(`  ${c.dim}1.${c.reset} ${t("interFormatDocx")}`);
+  console.log(`  ${c.dim}2.${c.reset} ${t("interFormatPdf")}`);
+  const formatChoice = await ask(`${c.cyan}?${c.reset} Select (Enter = 1): `);
+  const outputFormat: OutputFormat = parseOutputFormatChoice(formatChoice);
+  const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
+
   const baseName = path.basename(resolvedPath, ".md");
-  const defaultOutput = path.join(path.dirname(resolvedPath), `${baseName}.docx`);
+  const defaultOutput = path.join(path.dirname(resolvedPath), `${baseName}${fileExt}`);
 
   const outputPath = await ask(
     `${c.cyan}?${c.reset} ${t("interOutputPath")} ${c.dim}(Enter = ${path.basename(defaultOutput)})${c.reset}: `
@@ -228,40 +262,48 @@ async function convertSingleFile(): Promise<void> {
     console.log(`\n${c.cyan}→${c.reset} ${t("interAutoRenderMermaid")}`);
   }
 
-  // Ask about saving images
-  const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+  // Ask about saving images (only for DOCX)
   let saveImagesDir: string | undefined;
-  if (saveImagesChoice.toLowerCase() === "y") {
-    const baseName = path.basename(resolvedPath, ".md");
-    const defaultImagesDir = path.join(path.dirname(resolvedPath), `${baseName}_images`);
-    const imagesPath = await ask(
-      `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
-    );
-    saveImagesDir = imagesPath || defaultImagesDir;
-  }
-
-  // Ask about image DPI
-  const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
   let imageDpi: number | undefined;
-  if (adjustDpiChoice.toLowerCase() === "y") {
-    const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
-    const dpi = parseInt(dpiInput, 10);
-    if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
-      imageDpi = dpi;
+
+  if (outputFormat === "docx") {
+    const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+    if (saveImagesChoice.toLowerCase() === "y") {
+      const baseName = path.basename(resolvedPath, ".md");
+      const defaultImagesDir = path.join(path.dirname(resolvedPath), `${baseName}_images`);
+      const imagesPath = await ask(
+        `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
+      );
+      saveImagesDir = imagesPath || defaultImagesDir;
+    }
+
+    // Ask about image DPI
+    const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
+    if (adjustDpiChoice.toLowerCase() === "y") {
+      const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
+      imageDpi = parseDpiInput(dpiInput);
     }
   }
 
-  console.log(`${c.cyan}→${c.reset} ${t("converting")}`);
+  console.log(`${c.cyan}→${c.reset} ${t("converting")} (${outputFormat.toUpperCase()})`);
 
   try {
-    const converter = new MdToDocxConverter();
-    await converter.convertFile(resolvedPath, finalOutput, {
-      enableMermaid: hasMermaid,
-      saveImagesDir,
-      imageDpi,
-    });
+    if (outputFormat === "pdf") {
+      const pdfConverter = new MdToPdfConverter();
+      await pdfConverter.convertFile(resolvedPath, finalOutput, {
+        enableMermaid: hasMermaid,
+      });
+      await pdfConverter.cleanup();
+    } else {
+      const docxConverter = new MdToDocxConverter();
+      await docxConverter.convertFile(resolvedPath, finalOutput, {
+        enableMermaid: hasMermaid,
+        saveImagesDir,
+        imageDpi,
+      });
+    }
     console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}`);
-    if (saveImagesDir) {
+    if (saveImagesDir && outputFormat === "docx") {
       console.log(`${c.cyan}→${c.reset} ${t("interImagesSaved")} ${c.bright}${path.resolve(saveImagesDir)}${c.reset}`);
     }
     console.log("");
@@ -344,8 +386,16 @@ async function mergeDirectory(): Promise<void> {
     console.log(`  ${c.dim}${i + 1}.${c.reset} ${f}${suffix}`);
   });
 
+  // Ask about output format
+  console.log(`\n${c.cyan}?${c.reset} ${t("interSelectFormat")}`);
+  console.log(`  ${c.dim}1.${c.reset} ${t("interFormatDocx")}`);
+  console.log(`  ${c.dim}2.${c.reset} ${t("interFormatPdf")}`);
+  const formatChoice = await ask(`${c.cyan}?${c.reset} Select (Enter = 1): `);
+  const outputFormat: OutputFormat = parseOutputFormatChoice(formatChoice);
+  const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
+
   const dirName = path.basename(resolvedDir);
-  const defaultOutput = path.join(path.dirname(resolvedDir), `${dirName}.docx`);
+  const defaultOutput = path.join(path.dirname(resolvedDir), `${dirName}${fileExt}`);
 
   const outputPath = await ask(
     `\n${c.cyan}?${c.reset} ${t("interOutputPath")} ${c.dim}(Enter = ${path.basename(defaultOutput)})${c.reset}: `
@@ -359,53 +409,56 @@ async function mergeDirectory(): Promise<void> {
   console.log(`  ${c.dim}3.${c.reset} ${t("interSepNone")}`);
 
   const sepChoice = await ask(`${c.cyan}?${c.reset} ${t("interSelectSeparator")} `);
-  const separators: Record<string, "pagebreak" | "hr" | "none"> = {
-    "1": "pagebreak",
-    "2": "hr",
-    "3": "none",
-    "": "pagebreak",
-  };
-  const separator = separators[sepChoice] || "pagebreak";
+  const separator = parseSeparatorChoice(sepChoice);
 
   const hasMermaid = detectMermaidInPath(resolvedDir);
   if (hasMermaid) {
     console.log(`\n${c.cyan}→${c.reset} ${t("interAutoRenderMermaid")}`);
   }
 
-  // Ask about saving images
-  const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+  // Ask about saving images (only for DOCX)
   let saveImagesDir: string | undefined;
-  if (saveImagesChoice.toLowerCase() === "y") {
-    const defaultImagesDir = path.join(path.dirname(resolvedDir), `${dirName}_images`);
-    const imagesPath = await ask(
-      `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
-    );
-    saveImagesDir = imagesPath || defaultImagesDir;
-  }
-
-  // Ask about image DPI
-  const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
   let imageDpi: number | undefined;
-  if (adjustDpiChoice.toLowerCase() === "y") {
-    const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
-    const dpi = parseInt(dpiInput, 10);
-    if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
-      imageDpi = dpi;
+
+  if (outputFormat === "docx") {
+    const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+    if (saveImagesChoice.toLowerCase() === "y") {
+      const defaultImagesDir = path.join(path.dirname(resolvedDir), `${dirName}_images`);
+      const imagesPath = await ask(
+        `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
+      );
+      saveImagesDir = imagesPath || defaultImagesDir;
+    }
+
+    // Ask about image DPI
+    const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
+    if (adjustDpiChoice.toLowerCase() === "y") {
+      const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
+      imageDpi = parseDpiInput(dpiInput);
     }
   }
 
-  console.log(`${c.cyan}→${c.reset} ${t("converting")}`);
+  console.log(`${c.cyan}→${c.reset} ${t("converting")} (${outputFormat.toUpperCase()})`);
 
   try {
-    const converter = new MdToDocxConverter();
-    await converter.convertDirectory(resolvedDir, finalOutput, {
-      enableMermaid: hasMermaid,
-      separator,
-      saveImagesDir,
-      imageDpi,
-    });
+    if (outputFormat === "pdf") {
+      const pdfConverter = new MdToPdfConverter();
+      await pdfConverter.convertDirectory(resolvedDir, finalOutput, {
+        enableMermaid: hasMermaid,
+        separator,
+      });
+      await pdfConverter.cleanup();
+    } else {
+      const docxConverter = new MdToDocxConverter();
+      await docxConverter.convertDirectory(resolvedDir, finalOutput, {
+        enableMermaid: hasMermaid,
+        separator,
+        saveImagesDir,
+        imageDpi,
+      });
+    }
     console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}`);
-    if (saveImagesDir) {
+    if (saveImagesDir && outputFormat === "docx") {
       console.log(`${c.cyan}→${c.reset} ${t("interImagesSaved")} ${c.bright}${path.resolve(saveImagesDir)}${c.reset}`);
     }
     console.log("");
@@ -456,8 +509,16 @@ async function specifyDirectory(): Promise<void> {
     return;
   }
 
+  // Ask about output format
+  console.log(`\n${c.cyan}?${c.reset} ${t("interSelectFormat")}`);
+  console.log(`  ${c.dim}1.${c.reset} ${t("interFormatDocx")}`);
+  console.log(`  ${c.dim}2.${c.reset} ${t("interFormatPdf")}`);
+  const formatChoice = await ask(`${c.cyan}?${c.reset} Select (Enter = 1): `);
+  const outputFormat: OutputFormat = parseOutputFormatChoice(formatChoice);
+  const fileExt = outputFormat === "pdf" ? ".pdf" : ".docx";
+
   const dirName = path.basename(resolvedDir);
-  const defaultOutput = path.join(path.dirname(resolvedDir), `${dirName}.docx`);
+  const defaultOutput = path.join(path.dirname(resolvedDir), `${dirName}${fileExt}`);
 
   const outputPath = await ask(
     `${c.cyan}?${c.reset} ${t("interOutputPath")} ${c.dim}(Enter = ${defaultOutput})${c.reset}: `
@@ -471,53 +532,56 @@ async function specifyDirectory(): Promise<void> {
   console.log(`  ${c.dim}3.${c.reset} ${t("interSepNone")}`);
 
   const sepChoice = await ask(`${c.cyan}?${c.reset} ${t("interSelectSeparator")} `);
-  const separators: Record<string, "pagebreak" | "hr" | "none"> = {
-    "1": "pagebreak",
-    "2": "hr",
-    "3": "none",
-    "": "pagebreak",
-  };
-  const separator = separators[sepChoice] || "pagebreak";
+  const separator = parseSeparatorChoice(sepChoice);
 
   const hasMermaid = detectMermaidInPath(resolvedDir);
   if (hasMermaid) {
     console.log(`\n${c.cyan}→${c.reset} ${t("interAutoRenderMermaid")}`);
   }
 
-  // Ask about saving images
-  const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+  // Ask about saving images (only for DOCX)
   let saveImagesDir: string | undefined;
-  if (saveImagesChoice.toLowerCase() === "y") {
-    const defaultImagesDir = path.join(path.dirname(resolvedDir), `${dirName}_images`);
-    const imagesPath = await ask(
-      `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
-    );
-    saveImagesDir = imagesPath || defaultImagesDir;
-  }
-
-  // Ask about image DPI
-  const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
   let imageDpi: number | undefined;
-  if (adjustDpiChoice.toLowerCase() === "y") {
-    const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
-    const dpi = parseInt(dpiInput, 10);
-    if (!isNaN(dpi) && dpi >= 72 && dpi <= 600) {
-      imageDpi = dpi;
+
+  if (outputFormat === "docx") {
+    const saveImagesChoice = await ask(`${c.cyan}?${c.reset} ${t("interSaveImages")} `);
+    if (saveImagesChoice.toLowerCase() === "y") {
+      const defaultImagesDir = path.join(path.dirname(resolvedDir), `${dirName}_images`);
+      const imagesPath = await ask(
+        `${c.cyan}?${c.reset} ${t("interSaveImagesPath")} ${c.dim}(Enter = ${defaultImagesDir})${c.reset}: `
+      );
+      saveImagesDir = imagesPath || defaultImagesDir;
+    }
+
+    // Ask about image DPI
+    const adjustDpiChoice = await ask(`${c.cyan}?${c.reset} ${t("interAdjustImageDpi")} `);
+    if (adjustDpiChoice.toLowerCase() === "y") {
+      const dpiInput = await ask(`${c.cyan}?${c.reset} ${t("interImageDpi")} `);
+      imageDpi = parseDpiInput(dpiInput);
     }
   }
 
-  console.log(`${c.cyan}→${c.reset} ${t("converting")}`);
+  console.log(`${c.cyan}→${c.reset} ${t("converting")} (${outputFormat.toUpperCase()})`);
 
   try {
-    const converter = new MdToDocxConverter();
-    await converter.convertDirectory(resolvedDir, finalOutput, {
-      enableMermaid: hasMermaid,
-      separator,
-      saveImagesDir,
-      imageDpi,
-    });
+    if (outputFormat === "pdf") {
+      const pdfConverter = new MdToPdfConverter();
+      await pdfConverter.convertDirectory(resolvedDir, finalOutput, {
+        enableMermaid: hasMermaid,
+        separator,
+      });
+      await pdfConverter.cleanup();
+    } else {
+      const docxConverter = new MdToDocxConverter();
+      await docxConverter.convertDirectory(resolvedDir, finalOutput, {
+        enableMermaid: hasMermaid,
+        separator,
+        saveImagesDir,
+        imageDpi,
+      });
+    }
     console.log(`\n${c.green}✓${c.reset} ${t("done")} ${t("completed")} ${c.bright}${finalOutput}${c.reset}`);
-    if (saveImagesDir) {
+    if (saveImagesDir && outputFormat === "docx") {
       console.log(`${c.cyan}→${c.reset} ${t("interImagesSaved")} ${c.bright}${path.resolve(saveImagesDir)}${c.reset}`);
     }
     console.log("");
@@ -633,4 +697,8 @@ async function main(): Promise<void> {
   rl.close();
 }
 
-main();
+// Only execute main() when run directly (not when imported by tests).
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  main();
+}

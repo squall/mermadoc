@@ -36,7 +36,11 @@ const DEFAULT_LANGUAGE: BundledLanguage = "javascript";
 // Language aliases mapping
 const LANGUAGE_ALIASES: Record<string, BundledLanguage> = {
   js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascript",
   ts: "typescript",
+  tsx: "typescript",
   py: "python",
   rb: "ruby",
   cs: "csharp",
@@ -44,8 +48,16 @@ const LANGUAGE_ALIASES: Record<string, BundledLanguage> = {
   sh: "bash",
   zsh: "bash",
   shell: "shellscript",
+  console: "bash",
   yml: "yaml",
   md: "markdown",
+  // JSON with comments / trailing commas — highlight as JSON
+  jsonc: "json",
+  json5: "json",
+  htm: "html",
+  psql: "sql",
+  mysql: "sql",
+  docker: "dockerfile",
 };
 
 let highlighterInstance: Highlighter | null = null;
@@ -110,6 +122,24 @@ export interface CodePluginOptions {
    * @default false
    */
   showLineNumbers?: boolean;
+
+  /**
+   * Code block border color (hex without #). Set to null to disable the border.
+   * @default "D0D7DE"
+   */
+  borderColor?: string | null;
+
+  /**
+   * Horizontal padding inside the code block, in twips (240 = 0.42cm)
+   * @default 240
+   */
+  padding?: number;
+
+  /**
+   * Line spacing for code lines, in twentieths of a point (240 = single)
+   * @default 240
+   */
+  lineSpacing?: number;
 }
 
 /**
@@ -121,7 +151,50 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
     fontFamily = "Consolas",
     fontSize = 20,
     showLineNumbers = false,
+    borderColor = "D0D7DE",
+    padding = 240,
+    lineSpacing = 240,
   } = options;
+
+  /**
+   * Build paragraph properties shared by every line of a code block.
+   *
+   * A DOCX paragraph cannot span multiple lines, so a code block is rendered as
+   * one paragraph per line. Drawing left/right borders on every line and the
+   * top/bottom border only on the first/last line makes the separate paragraphs
+   * read as a single framed block.
+   */
+  const blockFrame = (docx: any, index: number, total: number) => {
+    const edge = borderColor
+      ? { style: docx.BorderStyle.SINGLE, size: 4, color: borderColor, space: 0 }
+      : undefined;
+    const none = { style: docx.BorderStyle.NONE, size: 0, color: "auto", space: 0 };
+
+    return {
+      shading: {
+        type: docx.ShadingType.SOLID,
+        color: backgroundColor,
+        fill: backgroundColor,
+      },
+      indent: { left: padding, right: padding },
+      spacing: {
+        before: index === 0 ? 120 : 0,
+        after: index === total - 1 ? 120 : 0,
+        line: lineSpacing,
+      },
+      contextualSpacing: true,
+      ...(edge
+        ? {
+            border: {
+              top: index === 0 ? edge : none,
+              bottom: index === total - 1 ? edge : none,
+              left: edge,
+              right: edge,
+            },
+          }
+        : {}),
+    };
+  };
 
   // Pre-load highlighter
   const highlighterPromise = getHighlighter();
@@ -141,19 +214,19 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
       const code = codeNode.value || "";
       const lang = resolveLanguage(codeNode.lang);
 
-      // If highlighter not ready or language not supported, use plain text rendering
+      // If highlighter not ready or language not supported, use plain text rendering.
+      // The node must be marked as processed here too — otherwise the default
+      // handler emits the same code block a second time and every unlabelled
+      // block appears twice in the document.
       if (!highlighterInstance || !lang) {
         const lines = code.split("\n");
+        (node as { type: string }).type = "";
+
         return lines.map(
           (line, index) =>
             new docx.Paragraph({
               ...paraProps,
-              shading: {
-                type: docx.ShadingType.SOLID,
-                color: backgroundColor,
-                fill: backgroundColor,
-              },
-              spacing: { before: index === 0 ? 120 : 0, after: index === lines.length - 1 ? 120 : 0, line: 276 },
+              ...blockFrame(docx, index, lines.length),
               children: [
                 ...(showLineNumbers
                   ? [
@@ -224,16 +297,7 @@ export function codePlugin(options: CodePluginOptions = {}): IPlugin {
         paragraphs.push(
           new docx.Paragraph({
             ...paraProps,
-            shading: {
-              type: docx.ShadingType.SOLID,
-              color: backgroundColor,
-              fill: backgroundColor,
-            },
-            spacing: {
-              before: lineIndex === 0 ? 120 : 0,
-              after: lineIndex === tokens.length - 1 ? 120 : 0,
-              line: 276,
-            },
+            ...blockFrame(docx, lineIndex, tokens.length),
             children: runs,
           })
         );

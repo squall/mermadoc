@@ -1,12 +1,12 @@
 # Mermadoc
 
-Convert Markdown to Word documents with Mermaid diagram rendering and syntax highlighting.
+Convert Markdown to Word documents or PDF with Mermaid diagram rendering and syntax highlighting.
 
 > **Mermadoc** = **Merma**id + **Doc**ument
 
 ## Features
 
-- Convert Markdown to Word documents (.docx)
+- Convert Markdown to Word documents (.docx) or PDF (.pdf)
 - Auto-detect and render Mermaid diagrams
 - Code syntax highlighting (powered by Shiki)
 - Merge multiple Markdown files into a single document
@@ -93,6 +93,15 @@ mermadoc example.md -d 300
 
 # Combine options: high DPI + save images
 mermadoc example.md -d 300 -i ./images
+
+# Convert to PDF
+mermadoc example.md -f pdf
+
+# Convert to PDF with custom output name
+mermadoc example.md -o output.pdf
+
+# Merge directory to PDF
+mermadoc ./reports -f pdf -o manual.pdf
 ```
 
 > **Note:** You can also use `npx mermadoc` if not installed globally.
@@ -134,11 +143,43 @@ await converter.convertFiles(
 );
 ```
 
+### PDF Conversion API
+
+```typescript
+import { MdToPdfConverter } from "mermadoc";
+
+const pdfConverter = new MdToPdfConverter();
+
+// Convert string to PDF
+const pdfBuffer = await pdfConverter.convert(markdownContent);
+
+// Convert with Mermaid diagrams
+const pdfWithMermaid = await pdfConverter.convertWithMermaid(markdownContent);
+
+// Convert file to PDF
+await pdfConverter.convertFile("input.md", "output.pdf");
+
+// Merge directory to PDF
+await pdfConverter.convertDirectory("./docs", "merged.pdf", {
+  separator: "pagebreak",
+});
+
+// Merge specific files to PDF
+await pdfConverter.convertFiles(
+  ["01-intro.md", "02-chapter.md"],
+  "book.pdf"
+);
+
+// Clean up resources (important for Mermaid conversion)
+await pdfConverter.cleanup();
+```
+
 ## CLI Options
 
 | Option | Description |
 |--------|-------------|
 | `-o, --output <file>` | Specify output file path |
+| `-f, --format <type>` | Output format: `docx` (default), `pdf` |
 | `-s, --separator <type>` | Section separator: `pagebreak`, `hr`, `none` |
 | `-i, --save-images <dir>` | Save images to specified directory |
 | `-d, --dpi <n>` | Image DPI/resolution (default: 150, range: 72-600) |
@@ -189,17 +230,19 @@ Example includes:
 ```
 mermadoc/
 ├── src/
-│   ├── converter.ts    # Core conversion logic
-│   ├── code-plugin.ts  # Syntax highlighting plugin
-│   ├── cli.ts          # Command line interface
-│   ├── interactive.ts  # Interactive interface
-│   ├── i18n.ts         # Internationalization
-│   └── index.ts        # Module exports
+│   ├── converter.ts      # DOCX conversion logic
+│   ├── pdf-converter.ts  # PDF conversion logic
+│   ├── code-plugin.ts    # Syntax highlighting plugin
+│   ├── cli.ts            # Command line interface
+│   ├── interactive.ts    # Interactive interface
+│   ├── i18n.ts           # Internationalization
+│   └── index.ts          # Module exports
 ├── example/
-│   └── example.md      # Example file
+│   └── example.md        # Example file
 ├── tests/
-│   └── converter.test.ts
-├── start               # Interactive launch script
+│   ├── converter.test.ts
+│   └── pdf-converter.test.ts
+├── start                 # Interactive launch script
 └── package.json
 ```
 
@@ -227,6 +270,10 @@ npm run test:watch
 - [@mermaid-js/mermaid-cli](https://github.com/mermaid-js/mermaid-cli) - Mermaid rendering
 - [shiki](https://github.com/shikijs/shiki) - Syntax highlighting
 - [sharp](https://github.com/lovell/sharp) - Image processing
+- [md-to-pdf](https://github.com/simonhaenisch/md-to-pdf) - PDF generation
+- [puppeteer](https://github.com/puppeteer/puppeteer) - Browser automation for PDF with Mermaid
+- [marked](https://github.com/markedjs/marked) - Markdown to HTML parsing
+- [isomorphic-dompurify](https://github.com/kkomelin/isomorphic-dompurify) - HTML sanitization
 
 ## Author
 
@@ -240,11 +287,11 @@ ISC
 
 # 中文說明
 
-Markdown 轉 Word 文件工具，支援 Mermaid 圖表自動渲染與程式碼語法高亮。
+Markdown 轉 Word 文件或 PDF 工具，支援 Mermaid 圖表自動渲染與程式碼語法高亮。
 
 ## 功能特色
 
-- 將 Markdown 轉換為 Word 文件 (.docx)
+- 將 Markdown 轉換為 Word 文件 (.docx) 或 PDF (.pdf)
 - 支援 Mermaid 圖表自動偵測與渲染
 - 程式碼區塊語法高亮（使用 Shiki）
 - 合併多個 Markdown 檔案為單一文件
@@ -331,6 +378,15 @@ mermadoc example.md -d 300
 
 # 組合選項：高解析度 + 儲存圖片
 mermadoc example.md -d 300 -i ./images
+
+# 轉換為 PDF
+mermadoc example.md -f pdf
+
+# 轉換為 PDF 並指定輸出檔名
+mermadoc example.md -o output.pdf
+
+# 合併資料夾為 PDF
+mermadoc ./reports -f pdf -o manual.pdf
 ```
 
 > **提示：** 若未全域安裝，可使用 `npx mermadoc` 執行。
@@ -372,11 +428,43 @@ await converter.convertFiles(
 );
 ```
 
+### PDF 轉換 API
+
+```typescript
+import { MdToPdfConverter } from "mermadoc";
+
+const pdfConverter = new MdToPdfConverter();
+
+// 轉換字串為 PDF
+const pdfBuffer = await pdfConverter.convert(markdownContent);
+
+// 轉換含 Mermaid 圖表的內容
+const pdfWithMermaid = await pdfConverter.convertWithMermaid(markdownContent);
+
+// 轉換檔案為 PDF
+await pdfConverter.convertFile("input.md", "output.pdf");
+
+// 合併目錄為 PDF
+await pdfConverter.convertDirectory("./docs", "merged.pdf", {
+  separator: "pagebreak",
+});
+
+// 合併指定檔案為 PDF
+await pdfConverter.convertFiles(
+  ["01-intro.md", "02-chapter.md"],
+  "book.pdf"
+);
+
+// 清理資源（Mermaid 轉換後重要）
+await pdfConverter.cleanup();
+```
+
 ## CLI 選項
 
 | 選項 | 說明 |
 |------|------|
 | `-o, --output <檔案>` | 指定輸出檔案路徑 |
+| `-f, --format <類型>` | 輸出格式：`docx`（預設）、`pdf` |
 | `-s, --separator <類型>` | 章節分隔方式：`pagebreak`（分頁）、`hr`（分隔線）、`none`（無） |
 | `-i, --save-images <資料夾>` | 儲存圖片到指定資料夾 |
 | `-d, --dpi <數值>` | 圖片解析度 DPI（預設：150，範圍：72-600） |

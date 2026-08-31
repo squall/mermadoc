@@ -35,9 +35,11 @@ export interface Messages {
   cliOptImageDpi: string;
   cliOptHelp: string;
   cliImagesSaved: string;
+  cliOptFormat: string;
   cliExConvertSingle: string;
   cliExMergeDir: string;
   cliExWithSeparator: string;
+  cliExConvertToPdf: string;
   cliInputRequired: string;
   cliMergeFiles: string;
   cliConvertFile: string;
@@ -81,6 +83,9 @@ export interface Messages {
   interImagesSaved: string;
   interAdjustImageDpi: string;
   interImageDpi: string;
+  interSelectFormat: string;
+  interFormatDocx: string;
+  interFormatPdf: string;
 
   // Help
   helpTitle: string;
@@ -135,9 +140,11 @@ const messages: Record<Language, Messages> = {
     cliOptImageDpi: "Image DPI/resolution (default: 150, range: 72-600)",
     cliOptHelp: "Show help",
     cliImagesSaved: "Images saved to:",
+    cliOptFormat: "Output format: docx (default), pdf",
     cliExConvertSingle: "# Convert single file",
     cliExMergeDir: "# Merge all files in directory",
     cliExWithSeparator: "# Use horizontal rule separator",
+    cliExConvertToPdf: "# Convert to PDF",
     cliInputRequired: "Please specify input file or directory",
     cliMergeFiles: "Merge Files",
     cliConvertFile: "Convert File",
@@ -181,6 +188,9 @@ const messages: Record<Language, Messages> = {
     interImagesSaved: "Images saved to:",
     interAdjustImageDpi: "Adjust image DPI? (y/N):",
     interImageDpi: "Image DPI (Enter = 150, range: 72-600):",
+    interSelectFormat: "Output format:",
+    interFormatDocx: "docx - Word Document (default)",
+    interFormatPdf: "pdf - PDF Document",
 
     // Help
     helpTitle: "Mermadoc Help",
@@ -234,9 +244,11 @@ const messages: Record<Language, Messages> = {
     cliOptImageDpi: "圖片解析度 DPI（預設：150，範圍：72-600）",
     cliOptHelp: "顯示說明",
     cliImagesSaved: "圖片已儲存至:",
+    cliOptFormat: "輸出格式: docx（預設）, pdf",
     cliExConvertSingle: "# 轉換單一檔案",
     cliExMergeDir: "# 合併整個資料夾的文件",
     cliExWithSeparator: "# 使用分隔線而非分頁",
+    cliExConvertToPdf: "# 轉換為 PDF",
     cliInputRequired: "請指定輸入檔案或資料夾",
     cliMergeFiles: "合併文件",
     cliConvertFile: "轉換文件",
@@ -280,6 +292,9 @@ const messages: Record<Language, Messages> = {
     interImagesSaved: "圖片已儲存至:",
     interAdjustImageDpi: "是否調整圖片解析度？(y/N):",
     interImageDpi: "圖片解析度 DPI (Enter = 150，範圍：72-600):",
+    interSelectFormat: "輸出格式：",
+    interFormatDocx: "docx - Word 文件（預設）",
+    interFormatPdf: "pdf - PDF 文件",
 
     // Help
     helpTitle: "Mermadoc 使用說明",
